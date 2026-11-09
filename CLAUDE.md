@@ -121,7 +121,9 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
 - README previews are GIFs (`gif`, 288 px, 15 fps; the wiring preview is cut to its best 11 s), because GitHub
   does not play repository MP4s in a README. At 8 fps they looked choppy.
 - Check GIF frame timing after writing (delay 7/100 s = 14.3 fps).
-- Demo page: a VR | MR switch shows one set of three videos (VR by default, the original page; links `#mr`,
+- The MR view opens with the full film (`demo/media/mr-full.mp4`, the full edit re-encoded at 2.6 Mbit/s with
+  `vtool encode`), then the three clips.
+- Demo page: a VR | XR switch (the XR tab is the MR footage; links `#xr`, `#de-xr`, old `#mr` still works) shows one set of three videos (VR by default, the original page; links `#mr`,
   `#de-mr`; MR videos load only when shown). MR: `mr-pegs`, `mr-wiring`, `mr-finished`, built by
   `tools/video/mr_clips.py` from `quest3-videos/mr-session-raw.mp4` (crops, cross-fades, bilingual captions burned
   in with `vtool caption`; DE large on top, EN below (Suavi)). Suavi: skip the first 30 s (setup) of that recording; the lab and its

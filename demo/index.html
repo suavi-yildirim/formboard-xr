@@ -32,6 +32,10 @@
     .section .tag { color: #0d1117; background: var(--accent); border-radius: 999px; padding: 2px 10px; font: 700 12px system-ui, sans-serif; letter-spacing: 0.06em; }
     .section .tag.mr { background: #f7a35c; }
     .section p { margin: 0; color: var(--muted); font-size: 15px; flex-basis: 100%; }
+    .hero { max-width: 1120px; margin: 0 auto 8px; }
+    .hero .body h2 { font-size: 20px; }
+    .section.sub { margin-top: 26px; }
+    .section.sub h2 { font-size: 19px; color: var(--muted); }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
     @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
@@ -72,7 +76,7 @@
   </div>
 
   <div class="switch" role="group" aria-label="Demo videos">
-    <button data-view="vr" aria-pressed="true"><b>VR</b> <span data-i18n="swVr">Virtual workshop</span></button><button data-view="mr" aria-pressed="false"><b>MR</b> <span data-i18n="swMr">FAPS Lab environment</span></button>
+    <button data-view="vr" aria-pressed="true"><b>VR</b> <span data-i18n="swVr">Virtual workshop</span></button><button data-view="mr" aria-pressed="false"><b>XR</b> <span data-i18n="swMr">FAPS Lab environment</span></button>
   </div>
   <section class="view" data-view="vr">
   <div class="section">
@@ -113,9 +117,19 @@
   </section>
   <section class="view" data-view="mr" hidden>
   <div class="section">
-    <span class="tag mr">MR</span><h2 data-i18n="mrHead">Mixed reality: in the FAPS Lab environment</h2>
+    <span class="tag mr">XR</span><h2 data-i18n="mrHead">XR view: in the FAPS Lab environment</h2>
     <p data-i18n="mrLead">Press <i>Enter MR</i>: the headset cameras show the real room, here the FAPS Lab, and the formboard stands on a real table. The car harness lies at 1:1 on the floor. Captions in German and English.</p>
   </div>
+  <article class="card hero">
+    <div class="video">
+      <video src="media/mr-full.mp4" poster="media/mr-full.jpg" muted loop playsinline preload="none"></video>
+    </div>
+    <div class="body">
+      <div class="head"><h2 data-i18n="mrFullTitle">The whole run in 75 seconds</h2><div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div></div>
+      <p data-i18n="mrFullText">One film from start to finish: choosing the harness, setting the pegs, routing the wires, the quality check, and the harness in the car at 1:1.</p>
+    </div>
+  </article>
+  <div class="section sub"><h2 data-i18n="mrPartsHead">The same run in three parts</h2></div>
   <div class="grid">
     <article class="card">
       <div class="video">
@@ -177,8 +191,11 @@
     fact2: '<b>Schritt für Schritt geprüft</b>Einrasten am richtigen Stift, Fehler bei falscher Abzweigung oder übersprungenem Stift; Zeit, Fehler und Hinweise werden je Leitung protokolliert.',
     fact3: '<b>Keine Installation</b>WebXR im Browser des Headsets: Link öffnen, Enter VR oder Enter MR drücken. Handtracking oder Controller.',
     footer: `Im Headset aufgenommen; App-Töne wie abgespielt. Leitungssatzdaten: VW-VOBES-Beispiel „Old Beetle“ aus dem <a href="${ECAD}">prostep ivip ECAD-Wiki</a>, CC BY-SA 4.0.`,
-    mrHead: 'Mixed Reality: in der FAPS-Laborumgebung',
+    mrHead: 'XR-Ansicht: in der FAPS-Laborumgebung',
     mrLead: '<i>Enter MR</i> drücken: Die Kameras des Headsets zeigen den echten Raum, hier das FAPS-Labor, und das Formbrett steht auf einem echten Tisch. Der Fahrzeugleitungssatz liegt 1:1 auf dem Boden. Untertitel auf Deutsch und Englisch.',
+    mrFullTitle: 'Der ganze Ablauf in 75 Sekunden',
+    mrFullText: 'Ein Film von Anfang bis Ende: Leitungssatz wählen, Stifte setzen, Leitungen verlegen, die Qualitätsprüfung und der Leitungssatz im Fahrzeug im Maßstab 1:1.',
+    mrPartsHead: 'Derselbe Ablauf in drei Teilen',
     mrPegsTitle: 'Stifte und die ersten Leitungen',
     mrPegsText: 'Führungsstifte mit den Fingern ins Brett setzen, dann die ersten Leitungen verlegen. Jeder richtige Stift rastet grün ein, mit Klick und Vibration.',
     mrWiringTitle: 'Dichte Abzweige, Leitung für Leitung',
@@ -214,10 +231,10 @@
   }
   for (const b of document.querySelectorAll('.lang button')) b.addEventListener('click', () => setLang(b.dataset.lang));
 
-  // VR or MR videos, one set at a time. The link may say which: #mr, #vr, #de-mr, #en-vr (default VR).
+  // VR or XR videos, one set at a time. The link may say which: #xr (or #mr), #vr, #de-xr, #en-vr (default VR).
   let view = 'vr';
-  const tokens = (location.hash.slice(1) || '').toLowerCase().split(/[-+,]/);
-  function writeHash() { history.replaceState(null, '', '#' + lang + (view === 'mr' ? '-mr' : '')); }
+  const tokens = (location.hash.slice(1) || '').toLowerCase().split(/[-+,]/).map((x) => (x === 'xr' ? 'mr' : x));
+  function writeHash() { history.replaceState(null, '', '#' + lang + (view === 'mr' ? '-xr' : '')); }
   function setView(v, remember = true) {
     view = v === 'mr' ? 'mr' : 'vr';
     for (const b of document.querySelectorAll('.switch button')) b.setAttribute('aria-pressed', String(b.dataset.view === view));

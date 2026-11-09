@@ -9,7 +9,8 @@
 //                                                                  a range "s-e@x:y:w" also crops it to the 16:9 box
 //                                                                  at source pixel x, y (top left) with width w;
 //                                                                  a trailing "*0.5" plays the range at half speed
-//   vtool caption <in> <out.mp4> <captions.json> <kbps>           burn in captions (see the caption case)
+//   vtool caption <in> <out.mp4> <captions.json> <kbps> [hold s]  burn in captions (see the caption case); hold
+//                                                                  repeats the last frame (with its captions) at the end
 //   vtool stabilize <in> <out.mp4> <kbps> [window s] [zoom]       smooth the camera path (see the stabilize case)
 //   vtool levels <in> <step>                                      audio loudness per step (look for voices)
 //   vtool gif <in> <out.gif> <width> <fps> [start] [end]          looping GIF (for the README)
@@ -346,6 +347,7 @@ case "caption":
   let out = URL(fileURLWithPath: args[3])
   let caps = try! JSONDecoder().decode([Cap].self, from: Data(contentsOf: URL(fileURLWithPath: args[4])))
   let kbps = Int(args[5])!
+  let hold = args.count > 6 ? Double(args[6])! : 0
   let srcV = load { try await asset.loadTracks(withMediaType: .video) }.first!
   let srcA = load { try await asset.loadTracks(withMediaType: .audio) }.first
   let size = load { try await srcV.load(.naturalSize) }
@@ -443,9 +445,26 @@ case "caption":
   reader.startReading(); writer.startWriting(); writer.startSession(atSourceTime: .zero)
   let group = DispatchGroup()
   group.enter()
+  var last: CMSampleBuffer?
+  var held = 0
+  let holdFrames = Int(hold * 60)
   vIn.requestMediaDataWhenReady(on: DispatchQueue(label: "v")) {
     while vIn.isReadyForMoreMediaData {
-      guard let b = vOut.copyNextSampleBuffer() else { vIn.markAsFinished(); group.leave(); return }
+      guard let b = vOut.copyNextSampleBuffer() else {
+        // freeze: the last frame (already captioned) again, at 60 fps, for <hold> seconds
+        if let l = last, held < holdFrames {
+          held += 1
+          var timing = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: 60),
+                                          presentationTimeStamp: CMSampleBufferGetPresentationTimeStamp(l) + CMTime(value: CMTimeValue(held), timescale: 60),
+                                          decodeTimeStamp: .invalid)
+          var copy: CMSampleBuffer?
+          CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: l, sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleBufferOut: &copy)
+          vIn.append(copy!)
+          continue
+        }
+        vIn.markAsFinished(); group.leave(); return
+      }
+      last = b
       let t = CMSampleBufferGetPresentationTimeStamp(b).seconds
       if let px = CMSampleBufferGetImageBuffer(b) {
         let active = caps.filter { t >= $0.s && t < $0.e }

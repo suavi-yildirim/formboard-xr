@@ -15,7 +15,7 @@ IN = f'{ROOT}/quest3-videos/mr-session-raw.mp4'
 WORK = f'{ROOT}/quest3-videos/mr-work'
 OUTDIR = {'full': f'{ROOT}/quest3-videos'}
 FADE = 0.4
-CROP = '600:150:1320'  # right part: keeps the board, drops the wall and the poster on the left
+CROP = None  # was '600:150:1320' (kept the poster out); Suavi: no zoom, the poster may be seen
 
 # segment: (start, end, crop or None, caption key or None)
 CAP = {
@@ -58,7 +58,7 @@ LOGOS = [  # FAU (dark blue PNG, transparent) top left, FAPS (green) top right, 
 ]
 LOGO_S = 4.5
 
-def build(name, segs, kbps, cards=(), chapters=None, stamps=()):
+def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hold=0):
     """chapters: {caption key: (step number, 'Name')} for step chips and a progress bar (creative cut).
     stamps: [(raw time, text, 'ok' | 'err')] pop up at that moment of the recording."""
     segs = [tuple(x) + (1,) * (5 - len(x)) for x in segs]  # optional 5th field: speed (0.5 = half speed)
@@ -68,7 +68,7 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=()):
     subprocess.run([VT, 'montage', IN, raw, ranges, str(FADE), '1280', '720', '9000'], check=True)
     # smooth the head movement (camera path averaged over 0.7 s, 10 % zoom as margin), before the captions go on
     stab = f'{WORK}/{name}_stab.mp4'
-    r = subprocess.run([VT, 'stabilize', raw, stab, '9000', '0.7', '1.10'], check=True, capture_output=True, text=True)
+    r = subprocess.run([VT, 'stabilize', raw, stab, '9000', '0.7', zoom], check=True, capture_output=True, text=True)
     print(name, r.stdout.strip().splitlines()[0])
     raw = stab
     caps, t = [], 0.0
@@ -93,7 +93,8 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=()):
     total = t + FADE
     for c in cards:
         # a 5th field False: a normal caption box instead of a darkened title card
-        caps.append({'s': c[0] if c[0] >= 0 else total + c[0], 'e': c[1] if c[1] > 0 else total + c[1], 't': c[2], 'd': c[3],
+        # an end of None: stays fully visible to the last frame (no fade-out)
+        caps.append({'s': c[0] if c[0] >= 0 else total + c[0], 'e': total + 1 if c[1] is None else c[1] if c[1] > 0 else total + c[1], 't': c[2], 'd': c[3],
                      'card': c[4] if len(c) > 4 else True, 'fixed': True})
     # keep normal captions out of title cards
     for c in caps:
@@ -122,7 +123,7 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=()):
     jf = f'{WORK}/{name}.json'
     json.dump(caps, open(jf, 'w'), ensure_ascii=False, indent=1)
     out = f"{OUTDIR['full'] if name.startswith('formboard-xr') else ROOT + '/demo/media'}/{name}.mp4"
-    subprocess.run([VT, 'caption', raw, out, jf, str(kbps)], check=True)
+    subprocess.run([VT, 'caption', raw, out, jf, str(kbps), str(hold)], check=True)
     print(name, round(total, 1), 's')
 
 which = sys.argv[1:] or ['pegs', 'wiring', 'finish', 'full']
@@ -131,21 +132,26 @@ if 'wiring' in which: build('mr-wiring', WIRING, 3000)
 if 'finish' in which: build('mr-finished', FINISH, 3000)
 # Full edits: teaser, harness choice, pegs, wiring, finish; the car view starts with the turn from the board.
 # The ending: the sign above the car (2:51.5-2:54.4) at half speed, about 2 s clear, then under the end card.
-FULL = TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1] + [(165.7, 171.5, None, 'incar'), (171.5, 174.4, None, None, 0.5)]  # 2:44-2:45.6 is a whip pan (1100 px/s): dissolve instead
+# Suavi: no zoom in the full edits, so the wiring shots are uncropped here and the stabiliser zooms only 5 %.
+# The sign scene plays at 90 % speed; the end card comes over it and the last frame (2:54.35) is then held
+# still for 3 s (vtool caption hold), card fully visible to the end (Suavi: no choppy slow motion, no fade-out).
+HOLD = 3.0
+FULL = [(a, b, None) + tuple(x) for a, b, _, *x in TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1]] + \
+       [(165.7, 170.5, None, 'incar'), (170.5, 174.35, None, None, 0.9)]  # 2:44-2:45.6 is a whip pan (1100 px/s): dissolve instead
 CARDS = [
     (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
-    (-3.8, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
+    (-1.6, None, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
 ]
 if 'full' in which:
-    build('formboard-xr-mr-full', FULL, 4000, cards=CARDS)
+    build('formboard-xr-mr-full', FULL, 4000, cards=CARDS, zoom='1.05', hold=HOLD)
 if 'creative' in which:
     # Same story with more on screen: step chips (1-5), a progress bar with chapter marks, a pop-up at every
-    # finished wire and at the wrong peg, and a closer crop on the wrong-peg wire.
+    # finished wire and at the wrong peg.
     CAP['pegs'] = ('22 guide pegs, placed where the KBL branches', '22 Führungsstifte, gesetzt nach den KBL-Abzweigen')
     CAP['route'] = ('18 wires, each at its true KBL length', '18 Leitungen, jede in ihrer echten KBL-Länge')
     CAP['done'] = ('Flattened 1:1 from 3D: 30 segments, 0 % length error', '1:1 aus 3D abgewickelt: 30 Segmente, 0 % Längenfehler')
     CAP['incar'] = ('Same KBL file: the harness in the car, 1:1', 'Dieselbe KBL-Datei: der Leitungssatz im Fahrzeug, 1:1')
-    segs = [(116.9, 120.3, '620:100:1000') + tuple(x[3:]) if x[:2] == (116.9, 120.3) else x for x in FULL]
+    segs = FULL
     chapters = {'menu': (1, 'Wählen'), 'pegs': (2, 'Stifte setzen'),
                 'route': (3, 'Verlegen'), 'snap': (3, 'Verlegen'), 'grow': (3, 'Verlegen'), 'wrong': (3, 'Verlegen'),
                 'dense': (3, 'Verlegen'), 'bundle': (3, 'Verlegen'), 'last': (3, 'Verlegen'),
@@ -155,4 +161,4 @@ if 'creative' in which:
               (83.0, ok(5), 'ok'), (98.7, ok(6), 'ok'), (152.8, ok(14), 'ok'), (154.8, ok(15), 'ok'), (156.8, ok(16), 'ok'),
               (158.7, ok(17), 'ok'), (160.0, '✓ 18 / 18 · komplett', 'ok'),
               (187.9, '☑ Stecker', 'ok'), (188.9, '☑ Bündel', 'ok'), (191.6, '☑ Farben', 'ok')]
-    build('formboard-xr-mr-creative', segs, 4000, cards=CARDS, chapters=chapters, stamps=stamps)
+    build('formboard-xr-mr-creative', segs, 4000, cards=CARDS, chapters=chapters, stamps=stamps, zoom='1.05', hold=HOLD)
