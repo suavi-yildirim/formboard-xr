@@ -5,7 +5,11 @@
 //   vtool motion <in> <start> <end> <step>                        camera motion per step (pick calm takes)
 //   vtool cut <in> <out.mp4> <ranges "s-e,s-e"> [preset]          join ranges, Apple preset (large files)
 //   vtool encode <in> <out.mp4> <ranges> <w> <h> <kbps>           join ranges, H.264 + AAC at a set bitrate
-//   vtool montage <in> <out.mp4> <ranges> <fade> <w> <h> <kbps>   like encode, with cross-fades (video + audio)
+//   vtool montage <in> <out.mp4> <ranges> <fade> <w> <h> <kbps>   like encode, with cross-fades (video + audio);
+//                                                                  a range "s-e@x:y:w" also crops it to the 16:9 box
+//                                                                  at source pixel x, y (top left) with width w
+//   vtool caption <in> <out.mp4> <captions.json> <kbps>           burn in captions (see the caption case)
+//   vtool levels <in> <step>                                      audio loudness per step (look for voices)
 //   vtool gif <in> <out.gif> <width> <fps> [start] [end]          looping GIF (for the README)
 //   vtool frame <in> <out.jpg> <sec>                              poster image
 import AVFoundation
@@ -194,15 +198,25 @@ case "montage":
   // montage <in> <out.mp4> <ranges> <fadeSec> <width> <height> <kbps>: ranges joined with cross-fades
   // (video dissolve and audio cross-fade), H.264 + AAC at an explicit bitrate.
   let out = URL(fileURLWithPath: args[3])
-  let ranges = args[4].split(separator: ",").map { r -> CMTimeRange in
-    let se = r.split(separator: "-").map { Double($0)! }
+  let srcV = load { try await asset.loadTracks(withMediaType: .video) }.first!
+  let srcA = load { try await asset.loadTracks(withMediaType: .audio) }.first
+  let natural = load { try await srcV.load(.naturalSize) }
+  var crops: [CGAffineTransform] = []
+  let ranges = args[4].split(separator: ",").map { item -> CMTimeRange in
+    let parts = item.split(separator: "@")
+    let se = parts[0].split(separator: "-").map { Double($0)! }
+    var t = CGAffineTransform.identity
+    if parts.count > 1 {
+      // crop box (top-left x, y and width in source pixels, 16:9), scaled up to fill the frame
+      let c = parts[1].split(separator: ":").map { Double($0)! }
+      let k = natural.width / c[2]
+      t = CGAffineTransform(a: k, b: 0, c: 0, d: k, tx: -c[0] * k, ty: -c[1] * k)
+    }
+    crops.append(t)
     return CMTimeRange(start: CMTime(seconds: se[0], preferredTimescale: 600), end: CMTime(seconds: se[1], preferredTimescale: 600))
   }
   let fade = CMTime(seconds: Double(args[5])!, preferredTimescale: 600)
   let w = Int(args[6])!, h = Int(args[7])!, kbps = Int(args[8])!
-  let srcV = load { try await asset.loadTracks(withMediaType: .video) }.first!
-  let srcA = load { try await asset.loadTracks(withMediaType: .audio) }.first
-  let natural = load { try await srcV.load(.naturalSize) }
   let comp = AVMutableComposition()
   let lanes = min(2, ranges.count)
   let vT = (0..<lanes).map { _ in comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)! }
@@ -228,7 +242,9 @@ case "montage":
     let outStart = i < segs.count - 1 ? s.end - fade : s.end
     let solo = AVMutableVideoCompositionInstruction()
     solo.timeRange = CMTimeRange(start: inStart, end: outStart)
-    solo.layerInstructions = [AVMutableVideoCompositionLayerInstruction(assetTrack: vT[s.lane])]
+    let soloLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: vT[s.lane])
+    soloLayer.setTransform(crops[i], at: inStart)
+    solo.layerInstructions = [soloLayer]
     instructions.append(solo)
     if i < segs.count - 1 {
       let next = segs[i + 1]
@@ -237,7 +253,10 @@ case "montage":
       x.timeRange = tr
       let outgoing = AVMutableVideoCompositionLayerInstruction(assetTrack: vT[s.lane])
       outgoing.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: tr)
-      x.layerInstructions = [outgoing, AVMutableVideoCompositionLayerInstruction(assetTrack: vT[next.lane])]
+      outgoing.setTransform(crops[i], at: tr.start)
+      let incoming = AVMutableVideoCompositionLayerInstruction(assetTrack: vT[next.lane])
+      incoming.setTransform(crops[i + 1], at: tr.start)
+      x.layerInstructions = [outgoing, incoming]
       instructions.append(x)
       if !params.isEmpty {
         params[s.lane].setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: tr)
@@ -291,6 +310,132 @@ case "montage":
   if writer.status != .completed || reader.status == .failed { fail("montage failed: \(String(describing: writer.error ?? reader.error))") }
   let bytes = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int) ?? 0
   print(String(format: "wrote %@ (%.1f MB, %.1f s)", out.lastPathComponent, Double(bytes) / 1e6, total.seconds))
+
+case "caption":
+  // caption <in> <out.mp4> <captions.json> <kbps>: re-encode with captions drawn onto the frames.
+  // JSON: [{"s": start, "e": end, "t": "title", "d": "second line", "card": false}], times in seconds of <in>.
+  // Normal captions are a dark box at the bottom left with a cyan bar; "card": true dims the frame and
+  // centres the text (title cards). Each fades in and out over 0.35 s.
+  struct Cap: Decodable { let s: Double; let e: Double; let t: String; let d: String?; let card: Bool? }
+  let out = URL(fileURLWithPath: args[3])
+  let caps = try! JSONDecoder().decode([Cap].self, from: Data(contentsOf: URL(fileURLWithPath: args[4])))
+  let kbps = Int(args[5])!
+  let srcV = load { try await asset.loadTracks(withMediaType: .video) }.first!
+  let srcA = load { try await asset.loadTracks(withMediaType: .audio) }.first
+  let size = load { try await srcV.load(.naturalSize) }
+  let reader = try! AVAssetReader(asset: asset)
+  let vOut = AVAssetReaderTrackOutput(track: srcV, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+  reader.add(vOut)
+  var aOut: AVAssetReaderTrackOutput?
+  if let a = srcA { let o = AVAssetReaderTrackOutput(track: a, outputSettings: nil); reader.add(o); aOut = o }
+  try? FileManager.default.removeItem(at: out)
+  let writer = try! AVAssetWriter(outputURL: out, fileType: .mp4)
+  writer.shouldOptimizeForNetworkUse = true
+  let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: [
+    AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: Int(size.width), AVVideoHeightKey: Int(size.height),
+    AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: kbps * 1000, AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel, AVVideoMaxKeyFrameIntervalKey: 60]])
+  writer.add(vIn)
+  var aIn: AVAssetWriterInput?
+  if let a = srcA {
+    let fmt = load { try await a.load(.formatDescriptions) }.first
+    let i = AVAssetWriterInput(mediaType: .audio, outputSettings: nil, sourceFormatHint: fmt)
+    writer.add(i); aIn = i
+  }
+  let W = size.width, H = size.height, u = W / 1280 // layout in 1280-wide units
+  func font(_ px: CGFloat, _ bold: Bool) -> CTFont { CTFontCreateWithName((bold ? "HelveticaNeue-Bold" : "HelveticaNeue") as CFString, px * u, nil) }
+  func line(_ text: String, _ f: CTFont, _ c: CGColor) -> CTLine {
+    CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: f, .foregroundColor: c]))
+  }
+  func width(_ l: CTLine) -> CGFloat { CGFloat(CTLineGetTypographicBounds(l, nil, nil, nil)) }
+  func draw(_ ctx: CGContext, _ cap: Cap, _ alpha: CGFloat) {
+    ctx.saveGState(); ctx.setAlpha(alpha)
+    let title = line(cap.t, font(cap.card == true ? 46 : 34, true), CGColor(gray: 1, alpha: 1))
+    let sub = cap.d.map { line($0, font(cap.card == true ? 28 : 24, false), CGColor(red: 0.78, green: 0.83, blue: 0.9, alpha: 1)) }
+    if cap.card == true {
+      ctx.setFillColor(CGColor(red: 0.04, green: 0.06, blue: 0.09, alpha: 0.62)); ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+      ctx.textPosition = CGPoint(x: (W - width(title)) / 2, y: H / 2 + 6 * u); CTLineDraw(title, ctx)
+      if let s = sub { ctx.textPosition = CGPoint(x: (W - width(s)) / 2, y: H / 2 - 40 * u); CTLineDraw(s, ctx) }
+      ctx.setFillColor(CGColor(red: 0.36, green: 0.88, blue: 1, alpha: 1))
+      ctx.fill(CGRect(x: W / 2 - 40 * u, y: H / 2 + 66 * u, width: 80 * u, height: 4 * u))
+    } else {
+      let pad = 18 * u, x = 40 * u, y = 40 * u
+      let bw = max(width(title), sub.map(width) ?? 0) + 2 * pad + 8 * u
+      let bh = (sub == nil ? 34 : 70) * u + 2 * pad
+      let box = CGRect(x: x, y: y, width: bw, height: bh)
+      ctx.setFillColor(CGColor(red: 0.05, green: 0.07, blue: 0.1, alpha: 0.78))
+      ctx.addPath(CGPath(roundedRect: box, cornerWidth: 12 * u, cornerHeight: 12 * u, transform: nil)); ctx.fillPath()
+      ctx.setFillColor(CGColor(red: 0.36, green: 0.88, blue: 1, alpha: 1))
+      ctx.fill(CGRect(x: x, y: y + 12 * u, width: 5 * u, height: bh - 24 * u))
+      ctx.textPosition = CGPoint(x: x + pad + 8 * u, y: y + bh - pad - 28 * u); CTLineDraw(title, ctx)
+      if let s = sub { ctx.textPosition = CGPoint(x: x + pad + 8 * u, y: y + pad + 4 * u); CTLineDraw(s, ctx) }
+    }
+    ctx.restoreGState()
+  }
+  reader.startReading(); writer.startWriting(); writer.startSession(atSourceTime: .zero)
+  let group = DispatchGroup()
+  group.enter()
+  vIn.requestMediaDataWhenReady(on: DispatchQueue(label: "v")) {
+    while vIn.isReadyForMoreMediaData {
+      guard let b = vOut.copyNextSampleBuffer() else { vIn.markAsFinished(); group.leave(); return }
+      let t = CMSampleBufferGetPresentationTimeStamp(b).seconds
+      if let px = CMSampleBufferGetImageBuffer(b) {
+        let active = caps.filter { t >= $0.s && t < $0.e }
+        if !active.isEmpty {
+          CVPixelBufferLockBaseAddress(px, [])
+          let ctx = CGContext(data: CVPixelBufferGetBaseAddress(px), width: CVPixelBufferGetWidth(px), height: CVPixelBufferGetHeight(px),
+                              bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(px), space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
+          for c in active { draw(ctx, c, CGFloat(min(1, (t - c.s) / 0.35, (c.e - t) / 0.35))) }
+          CVPixelBufferUnlockBaseAddress(px, [])
+        }
+      }
+      vIn.append(b)
+    }
+  }
+  if let i = aIn, let o = aOut {
+    group.enter()
+    i.requestMediaDataWhenReady(on: DispatchQueue(label: "a")) {
+      while i.isReadyForMoreMediaData {
+        if let b = o.copyNextSampleBuffer() { i.append(b) } else { i.markAsFinished(); group.leave(); return }
+      }
+    }
+  }
+  group.wait()
+  let semC = DispatchSemaphore(value: 0)
+  writer.finishWriting { semC.signal() }
+  semC.wait()
+  if writer.status != .completed { fail("caption failed: \(String(describing: writer.error ?? reader.error))") }
+  let cbytes = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int) ?? 0
+  print(String(format: "wrote %@ (%.1f MB)", out.lastPathComponent, Double(cbytes) / 1e6))
+
+case "levels":
+  // levels <in> <step>: RMS and peak (dBFS) of the audio per step, to spot voices before publishing.
+  let step = Double(args[3])!
+  guard let a = load({ try await asset.loadTracks(withMediaType: .audio) }).first else { fail("no audio") }
+  let reader = try! AVAssetReader(asset: asset)
+  let o = AVAssetReaderTrackOutput(track: a, outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32,
+    AVLinearPCMIsFloatKey: true, AVLinearPCMIsNonInterleaved: false, AVNumberOfChannelsKey: 1, AVSampleRateKey: 16000])
+  reader.add(o); reader.startReading()
+  var bucket = 0, sum = 0.0, n = 0, peak: Float = 0
+  func flush() {
+    if n > 0 { print(String(format: "%6.1f s  rms %6.1f dB  peak %6.1f dB", Double(bucket) * step, 20 * log10(max(1e-9, (sum / Double(n)).squareRoot())), 20 * log10(max(1e-9, Double(peak))))) }
+    sum = 0; n = 0; peak = 0
+  }
+  while let b = o.copyNextSampleBuffer() {
+    let t0 = CMSampleBufferGetPresentationTimeStamp(b).seconds
+    guard let bb = CMSampleBufferGetDataBuffer(b) else { continue }
+    var len = 0; var ptr: UnsafeMutablePointer<Int8>?
+    CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &len, dataPointerOut: &ptr)
+    let count = len / 4
+    ptr!.withMemoryRebound(to: Float.self, capacity: count) { f in
+      for i in 0..<count {
+        let k = Int((t0 + Double(i) / 16000) / step)
+        if k != bucket { flush(); bucket = k }
+        sum += Double(f[i] * f[i]); n += 1; peak = max(peak, abs(f[i]))
+      }
+    }
+  }
+  flush()
 
 case "gif":
   // gif <in> <out.gif> <width> <fps> [start] [end]: looping animated GIF for places that do not play video

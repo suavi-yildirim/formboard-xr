@@ -21,12 +21,17 @@
     .btn { display: inline-block; padding: 10px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; }
     .btn.primary { background: var(--ok); color: #0d1117; }
     .btn.ghost { border: 1px solid var(--line); color: var(--text); }
+    .section { margin: 34px 0 12px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .section h2 { margin: 0; font-size: 24px; }
+    .section .tag { color: #0d1117; background: var(--accent); border-radius: 999px; padding: 2px 10px; font: 700 12px system-ui, sans-serif; letter-spacing: 0.06em; }
+    .section .tag.mr { background: #f7a35c; }
+    .section p { margin: 0; color: var(--muted); font-size: 15px; flex-basis: 100%; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
     @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
     .video { position: relative; aspect-ratio: 16 / 9; background: #000; }
     .video video { width: 100%; height: 100%; display: block; object-fit: cover; }
-    .controls { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+    .controls { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px; } /* top: the MR captions sit at the bottom */
     .controls button { border: 0; border-radius: 999px; padding: 6px 12px; background: rgba(14,18,25,0.8);
                        color: var(--text); font: 600 13px system-ui, sans-serif; cursor: pointer; }
     .controls button:hover { background: rgba(14,18,25,0.95); }
@@ -56,6 +61,47 @@
     <a class="btn ghost" href="https://github.com/suavi-yildirim/formboard-xr" data-i18n="source">Source on GitHub</a>
   </div>
 
+  <div class="section">
+    <span class="tag mr">MR</span><h2 data-i18n="mrHead">Mixed reality: on a real table</h2>
+    <p data-i18n="mrLead">Press <i>Enter MR</i>: the headset cameras show your room, and the formboard stands on your real table. The car harness lies at 1:1 on the floor. Captions in English and German.</p>
+  </div>
+  <div class="grid">
+    <article class="card">
+      <div class="video">
+        <video src="media/mr-pegs.mp4" poster="media/mr-pegs.jpg" autoplay muted loop playsinline preload="auto"></video>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
+      </div>
+      <div class="body">
+        <h2 data-i18n="mrPegsTitle">Pegs and the first wires</h2>
+        <p data-i18n="mrPegsText">Pinch the guide pegs into the board, then route the first wires. Each correct peg snaps green, with a click and a haptic tick.</p>
+      </div>
+    </article>
+    <article class="card">
+      <div class="video">
+        <video src="media/mr-wiring.mp4" poster="media/mr-wiring.jpg" autoplay muted loop playsinline preload="auto"></video>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
+      </div>
+      <div class="body">
+        <h2 data-i18n="mrWiringTitle">Dense branches, wire by wire</h2>
+        <p data-i18n="mrWiringText">Through the busy branch area to the last wire. The next peg glows, and the bundles build up as on a real formboard.</p>
+      </div>
+    </article>
+    <article class="card">
+      <div class="video">
+        <video src="media/mr-finished.mp4" poster="media/mr-finished.jpg" autoplay muted loop playsinline preload="auto"></video>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
+      </div>
+      <div class="body">
+        <h2 data-i18n="mrDoneTitle">Finished board and the car at 1:1</h2>
+        <p data-i18n="mrDoneText">The complete harness, the quality check, and the VW vehicle harness on the floor of the room, with the built harness in orange.</p>
+      </div>
+    </article>
+  </div>
+
+  <div class="section">
+    <span class="tag">VR</span><h2 data-i18n="vrHead">Virtual reality: in a virtual workshop</h2>
+    <p data-i18n="vrLead">Press <i>Enter VR</i>: a workshop with a bench and a work light; teleport or walk with the sticks.</p>
+  </div>
   <div class="grid">
     <article class="card">
       <div class="video">
@@ -121,6 +167,16 @@
     fact2: '<b>Schritt für Schritt geprüft</b>Einrasten am richtigen Stift, Fehler bei falscher Abzweigung oder übersprungenem Stift; Zeit, Fehler und Hinweise werden je Leitung protokolliert.',
     fact3: '<b>Keine Installation</b>WebXR im Browser des Headsets: Link öffnen, Enter VR oder Enter MR drücken. Handtracking oder Controller.',
     footer: `Im Headset aufgenommen; App-Töne wie abgespielt. Leitungssatzdaten: VW-VOBES-Beispiel „Old Beetle“ aus dem <a href="${ECAD}">prostep ivip ECAD-Wiki</a>, CC BY-SA 4.0.`,
+    mrHead: 'Mixed Reality: auf einem echten Tisch',
+    mrLead: '<i>Enter MR</i> drücken: Die Kameras des Headsets zeigen den eigenen Raum, und das Formbrett steht auf dem echten Tisch. Der Fahrzeugleitungssatz liegt 1:1 auf dem Boden. Untertitel auf Englisch und Deutsch.',
+    mrPegsTitle: 'Stifte und die ersten Leitungen',
+    mrPegsText: 'Führungsstifte mit den Fingern ins Brett setzen, dann die ersten Leitungen verlegen. Jeder richtige Stift rastet grün ein, mit Klick und Vibration.',
+    mrWiringTitle: 'Dichte Abzweige, Leitung für Leitung',
+    mrWiringText: 'Durch den dichten Abzweigbereich bis zur letzten Leitung. Der nächste Stift leuchtet, und die Bündel entstehen wie am echten Formbrett.',
+    mrDoneTitle: 'Fertiges Formbrett und das Fahrzeug 1:1',
+    mrDoneText: 'Der komplette Leitungssatz, die Qualitätsprüfung und der VW-Fahrzeugleitungssatz auf dem Boden des Raums, der gebaute Leitungssatz in Orange.',
+    vrHead: 'Virtual Reality: in einer virtuellen Werkstatt',
+    vrLead: '<i>Enter VR</i> drücken: eine Werkstatt mit Werkbank und Arbeitsleuchte; teleportieren oder mit den Sticks gehen.',
     soundOff: 'Ton aus', soundOn: 'Ton an', fullscreen: '⛶ Vollbild', langGroup: 'Sprache',
   };
   const EN = { soundOff: 'Sound off', soundOn: 'Sound on', fullscreen: '⛶ Fullscreen', langGroup: 'Language',

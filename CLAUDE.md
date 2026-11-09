@@ -121,5 +121,10 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
 - README previews are GIFs (`gif`, 288 px, 15 fps; the wiring preview is cut to its best 11 s), because GitHub
   does not play repository MP4s in a README. At 8 fps they looked choppy.
 - Check GIF frame timing after writing (delay 7/100 s = 14.3 fps).
-- Demo page order: wiring by hand, finished formboard, real KBL data from an example car. Each video has a sound
+- Demo page has two sections. Mixed reality first: `mr-pegs`, `mr-wiring`, `mr-finished`, built by
+  `tools/video/mr_clips.py` from `quest3-videos/mr-session-raw.mp4` (crops, cross-fades, bilingual captions burned
+  in with `vtool caption`; EN large, DE below). Suavi: skip the first 30 s (setup) of that recording; the lab and its
+  poster may be seen. The full MR edit (`quest3-videos/formboard-xr-mr-full.mp4`, about 64 s) stays local.
+  Video buttons sit at the top right, because captions are at the bottom left.
+- VR section order: wiring by hand, finished formboard, real KBL data from an example car. Each video has a sound
   button (one with sound at a time) and a fullscreen button.
