@@ -7,7 +7,7 @@ const STORE_KEY = 'formboard-demo-lang';
 
 const STRINGS = {
   en: {
-    menuKicker: 'FORMBOARD VR · WIRE HARNESS TRAINING',
+    menuKicker: 'FORMBOARD XR · WIRE HARNESS TRAINING',
     wiresN: '{n} wires',
     invalid: 'Harness data is invalid: {p}',
     harness: 'Harness', variant: 'Variant', mode: 'Mode',
@@ -43,8 +43,8 @@ const STRINGS = {
     colours: { RD: 'red', BN: 'brown', VT: 'violet', BU: 'blue', GY: 'grey', GN: 'green', YE: 'yellow', WH: 'white', OG: 'orange', BK: 'black', PK: 'pink' },
     // help box on the web page
     helpTitle: 'wire harness assembly training', helpDemo: 'demo videos',
-    helpQuest: 'On Quest 3: press <i>Enter VR</i> for the virtual workshop or <i>Enter MR</i> to put the board on your real table. Pinch the glowing wire end between thumb and index finger and pull it through the pegs. Point at a panel and pinch to press a button. With controllers: hold the grip button, aim at the floor and release to teleport; left stick walks, right stick turns.',
-    helpNoVr: 'VR needs a WebXR browser: open this link in the Quest 3 browser. Here it runs in desktop mode.',
+    helpQuest: 'On the headset (e.g. Meta Quest 3): press <i>Enter VR</i> for the virtual workshop or <i>Enter MR</i> to put the board on your real table. Pinch the glowing wire end between thumb and index finger and pull it through the pegs. Point at a panel and pinch to press a button. With controllers: hold the grip button, aim at the floor and release to teleport; left stick walks, right stick turns.',
+    helpNoVr: 'XR needs a WebXR browser: open this link in the headset’s browser (e.g. Meta Quest 3). Here it runs in desktop mode.',
     rowWork: 'Panel, wires', rowWorkHow: 'left-click, left-drag on the board',
     rowLook: 'Look around', rowLookHow: 'right-drag',
     rowPan: 'Pan', rowPanHow: 'Shift + right-drag, or arrow keys',
@@ -60,7 +60,7 @@ const STRINGS = {
     carNoSurface: 'No floor scan found (Quest Space Setup): the car stands where your gaze meets the floor.',
   },
   de: {
-    menuKicker: 'FORMBOARD VR · KABELBAUM-TRAINING',
+    menuKicker: 'FORMBOARD XR · KABELBAUM-TRAINING',
     wiresN: '{n} Leitungen',
     invalid: 'Leitungssatzdaten ungültig: {p}',
     harness: 'Leitungssatz', variant: 'Variante', mode: 'Modus',
@@ -95,8 +95,8 @@ const STRINGS = {
     drawing: 'Formbrett 1:1',
     colours: { RD: 'rot', BN: 'braun', VT: 'violett', BU: 'blau', GY: 'grau', GN: 'grün', YE: 'gelb', WH: 'weiß', OG: 'orange', BK: 'schwarz', PK: 'rosa' },
     helpTitle: 'Kabelbaummontage-Training', helpDemo: 'Demovideos',
-    helpQuest: 'Auf der Quest 3: <i>VR starten</i> für die virtuelle Werkstatt oder <i>MR starten</i>, um das Brett auf Ihren echten Tisch zu stellen. Das leuchtende Leitungsende zwischen Daumen und Zeigefinger greifen und durch die Stifte ziehen. Zum Drücken eines Knopfes auf das Panel zeigen und greifen. Mit Controllern: Grifftaste halten, auf den Boden zielen und loslassen zum Teleportieren; linker Stick zum Gehen, rechter Stick zum Drehen.',
-    helpNoVr: 'VR braucht einen WebXR-Browser: diesen Link im Browser der Quest 3 öffnen. Hier läuft es im Desktop-Modus.',
+    helpQuest: 'Auf dem Headset (z. B. Meta Quest 3): <i>VR starten</i> für die virtuelle Werkstatt oder <i>MR starten</i>, um das Brett auf Ihren echten Tisch zu stellen. Das leuchtende Leitungsende zwischen Daumen und Zeigefinger greifen und durch die Stifte ziehen. Zum Drücken eines Knopfes auf das Panel zeigen und greifen. Mit Controllern: Grifftaste halten, auf den Boden zielen und loslassen zum Teleportieren; linker Stick zum Gehen, rechter Stick zum Drehen.',
+    helpNoVr: 'XR braucht einen WebXR-Browser: diesen Link im Browser des Headsets öffnen (z. B. Meta Quest 3). Hier läuft es im Desktop-Modus.',
     rowWork: 'Panel, Leitungen', rowWorkHow: 'Linksklick, auf dem Brett mit links ziehen',
     rowLook: 'Umsehen', rowLookHow: 'mit rechts ziehen',
     rowPan: 'Verschieben', rowPanHow: 'Umschalt + rechts ziehen, oder Pfeiltasten',

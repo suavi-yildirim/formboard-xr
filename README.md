@@ -1,19 +1,19 @@
-# Formboard VR
+# Formboard XR
 
-**Wire harness assembly training in VR, driven by KBL data.** A real VW harness from its KBL file is flattened 1:1 onto a virtual formboard. You route it wire by wire with your bare hands, and every peg is checked. At the end you see the finished formboard, and where the harness sits in the car. It runs in the browser on Meta Quest 3 (WebXR), with no install.
+**Wire harness assembly training in XR, driven by KBL data.** A real VW harness from its KBL file is flattened 1:1 onto a virtual formboard. You route it wire by wire with your bare hands, and every peg is checked. At the end you see the finished formboard, and where the harness sits in the car. It runs in the browser of an XR headset such as Meta Quest 3 (WebXR), in VR or mixed reality, with no install.
 
 <p align="center">
-  <a href="https://suavi-yildirim.github.io/formboard-vr/"><b>▶ Try it in the browser</b></a> &nbsp;·&nbsp;
-  <a href="https://suavi-yildirim.github.io/formboard-vr/demo/"><b>🎬 VR Demo videos with sound</b></a>
+  <a href="https://suavi-yildirim.github.io/formboard-xr/"><b>▶ Try it in the browser</b></a> &nbsp;·&nbsp;
+  <a href="https://suavi-yildirim.github.io/formboard-xr/demo/"><b>🎬 XR Demo videos with sound</b></a>
 </p>
 
 <p align="center">English and German: EN | DE switch in the app and on the demo page</p>
 
 <table>
   <tr>
-    <td width="33%" align="center"><a href="https://suavi-yildirim.github.io/formboard-vr/demo/"><img src="demo/media/wiring.gif" width="100%" alt="Routing a wire by hand on the virtual formboard"></a></td>
-    <td width="33%" align="center"><a href="https://suavi-yildirim.github.io/formboard-vr/demo/"><img src="demo/media/formboard.gif" width="100%" alt="Menu, board prep, Show me, an error, quality check and summary"></a></td>
-    <td width="33%" align="center"><a href="https://suavi-yildirim.github.io/formboard-vr/demo/"><img src="demo/media/car.gif" width="100%" alt="The full VW harness at 1:1 with the ignition harness highlighted"></a></td>
+    <td width="33%" align="center"><a href="https://suavi-yildirim.github.io/formboard-xr/demo/"><img src="demo/media/wiring.gif" width="100%" alt="Routing a wire by hand on the virtual formboard"></a></td>
+    <td width="33%" align="center"><a href="https://suavi-yildirim.github.io/formboard-xr/demo/"><img src="demo/media/formboard.gif" width="100%" alt="Menu, board prep, Show me, an error, quality check and summary"></a></td>
+    <td width="33%" align="center"><a href="https://suavi-yildirim.github.io/formboard-xr/demo/"><img src="demo/media/car.gif" width="100%" alt="The full VW harness at 1:1 with the ignition harness highlighted"></a></td>
   </tr>
   <tr>
     <td align="center"><b>Wiring by hand</b><br><sub>The wire grows to your fingertips; each correct peg snaps green.</sub></td>
@@ -62,7 +62,7 @@ Without a Space Setup, the board goes to standard table height (74 cm) along you
 
 ## Controls
 
-| | Quest 3 (hands) | Quest 3 (controllers) | Desktop |
+| | Headset (hands) | Headset (controllers) | Desktop |
 |---|---|---|---|
 | Wires, pegs | Pinch at the wire end or peg | Trigger at the controller tip | Left-drag on the board |
 | Panel buttons | Point and pinch | Point and trigger | Left-click |

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Formboard VR demo</title>
-  <meta name="description" content="Wire harness assembly training in VR on Meta Quest 3, recorded in the headset.">
+  <title>Formboard XR demo</title>
+  <meta name="description" content="Wire harness assembly training in XR on an XR headset, recorded on Meta Quest 3.">
   <style>
     :root { --bg: #12161d; --card: #1b212b; --text: #e9eef5; --muted: #9aa7b8; --accent: #5ce1ff; --ok: #3ddc84; --line: #2a3340; }
     * { box-sizing: border-box; }
@@ -44,16 +44,16 @@
 <body>
 <main>
   <div class="top">
-    <div class="kicker" data-i18n="kicker">Formboard VR · recorded on Meta Quest 3</div>
+    <div class="kicker" data-i18n="kicker">Formboard XR · recorded on Meta Quest 3</div>
     <div class="lang" role="group" aria-label="Language">
       <button data-lang="en" aria-pressed="true">EN</button><button data-lang="de" aria-pressed="false">DE</button>
     </div>
   </div>
-  <h1 data-i18n="title">Wire harness assembly training in VR, driven by KBL data</h1>
+  <h1 data-i18n="title">Wire harness assembly training in XR, driven by KBL data</h1>
   <p class="lead" data-i18n="lead">A real VW harness from its KBL file, flattened 1:1 onto a virtual formboard. You route it wire by wire with your bare hands, and every peg is checked. At the end you see the finished formboard, and where the harness sits in the car.</p>
   <div class="actions">
-    <a class="btn primary" href="../" data-i18n="try">Try it in the browser or on Quest 3</a>
-    <a class="btn ghost" href="https://github.com/suavi-yildirim/formboard-vr" data-i18n="source">Source on GitHub</a>
+    <a class="btn primary" href="../" data-i18n="try">Try it in the browser or on a headset</a>
+    <a class="btn ghost" href="https://github.com/suavi-yildirim/formboard-xr" data-i18n="source">Source on GitHub</a>
   </div>
 
   <div class="grid">
@@ -94,7 +94,7 @@
   <div class="facts">
     <div class="fact" data-i18n="fact1"><b>From KBL to formboard</b>Wire paths from the KBL routing; flattening keeps segment lengths true (KBL wire lengths match the board paths to the millimetre).</div>
     <div class="fact" data-i18n="fact2"><b>Checked step by step</b>Snap on the right peg, error on a wrong branch or a skipped peg; time, errors and hints are logged per wire.</div>
-    <div class="fact" data-i18n="fact3"><b>No install</b>WebXR in the Quest browser: open the link, press Enter VR. Hand tracking or controllers.</div>
+    <div class="fact" data-i18n="fact3"><b>No install</b>WebXR in the headset’s browser: open the link, press Enter VR or Enter MR. Hand tracking or controllers.</div>
   </div>
 
   <footer data-i18n="footer">Recorded in the headset; app sounds as played. Harness data: VW VOBES "Old Beetle" sample from the <a href="https://ecad-wiki.prostep.org/sample/2018-12-27-volkswagen-vobesng-old-beetle/">prostep ivip ECAD wiki</a>, CC BY-SA 4.0.</footer>
@@ -104,12 +104,12 @@
   // then from the last visit, then from the browser language.
   const ECAD = 'https://ecad-wiki.prostep.org/sample/2018-12-27-volkswagen-vobesng-old-beetle/';
   const DE = {
-    pageTitle: 'Formboard VR – Demo',
-    description: 'Kabelbaummontage-Training in VR auf der Meta Quest 3, im Headset aufgenommen.',
-    kicker: 'Formboard VR · aufgenommen mit Meta Quest 3',
-    title: 'Kabelbaummontage-Training in VR, gesteuert durch KBL-Daten',
+    pageTitle: 'Formboard XR – Demo',
+    description: 'Kabelbaummontage-Training in XR auf einem XR-Headset, aufgenommen mit der Meta Quest 3.',
+    kicker: 'Formboard XR · aufgenommen mit Meta Quest 3',
+    title: 'Kabelbaummontage-Training in XR, gesteuert durch KBL-Daten',
     lead: 'Ein echter VW-Leitungssatz aus seiner KBL-Datei, 1:1 auf ein virtuelles Formbrett abgewickelt. Sie verlegen ihn Leitung für Leitung mit bloßen Händen, und jeder Stift wird geprüft. Am Ende sehen Sie das fertige Formbrett und wo der Leitungssatz im Fahrzeug sitzt.',
-    try: 'Im Browser oder auf der Quest 3 ausprobieren',
+    try: 'Im Browser oder auf dem Headset ausprobieren',
     source: 'Quellcode auf GitHub',
     wiringTitle: 'Verlegen von Hand',
     wiringText: 'Leitungsende mit den Fingern greifen und an den Stiften entlang ziehen. Die Leitung wächst bis zu den Fingerspitzen, und jeder richtige Stift rastet grün mit einem Klick ein.',
@@ -119,7 +119,7 @@
     carText: 'Der öffentliche VW-Leitungssatz „Old Beetle“ aus seiner KBL-Datei im Maßstab 1:1: 183 Segmente aus den KBL-Mittellinien. Orange ist der Zündungsleitungssatz im Motorraum, der auf dem Formbrett gebaut wird, an seiner Einbaulage im Fahrzeug.',
     fact1: '<b>Von der KBL zum Formbrett</b>Leitungswege aus dem KBL-Routing; die Abwicklung erhält die Segmentlängen (die KBL-Leitungslängen stimmen millimetergenau mit den Wegen auf dem Brett überein).',
     fact2: '<b>Schritt für Schritt geprüft</b>Einrasten am richtigen Stift, Fehler bei falscher Abzweigung oder übersprungenem Stift; Zeit, Fehler und Hinweise werden je Leitung protokolliert.',
-    fact3: '<b>Keine Installation</b>WebXR im Quest-Browser: Link öffnen, Enter VR drücken. Handtracking oder Controller.',
+    fact3: '<b>Keine Installation</b>WebXR im Browser des Headsets: Link öffnen, Enter VR oder Enter MR drücken. Handtracking oder Controller.',
     footer: `Im Headset aufgenommen; App-Töne wie abgespielt. Leitungssatzdaten: VW-VOBES-Beispiel „Old Beetle“ aus dem <a href="${ECAD}">prostep ivip ECAD-Wiki</a>, CC BY-SA 4.0.`,
     soundOff: 'Ton aus', soundOn: 'Ton an', fullscreen: '⛶ Vollbild', langGroup: 'Sprache',
   };

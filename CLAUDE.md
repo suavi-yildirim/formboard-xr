@@ -1,11 +1,14 @@
-# CLAUDE.md – Formboard VR
+# CLAUDE.md – Formboard XR
 
-WebXR wire-harness assembly trainer for Meta Quest 3 (three.js, no build step), driven by KBL data.
-Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de` German).
+WebXR wire-harness assembly trainer for XR headsets such as Meta Quest 3 (VR and mixed reality; three.js, no build step), driven by KBL data.
+Renamed from formboard-vr in Nov 2026. The old `/formboard-vr/…` addresses forward through the user-site repo
+`suavi-yildirim.github.io` (`04_Career/Master-Documents/user-site`), because Pages does not forward renamed sites.
+Keep that forwarding: links in PDFs that were already sent still use the old address.
+Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de` German).
 
 ## Commands
 
-- `python3 -m http.server` and open http://localhost:8000 (preview server "formboard-vr" on port 8123).
+- `python3 -m http.server` and open http://localhost:8000 (preview server "formboard-xr" on port 8123).
 - `npm test`: `node --check` on every module, then `node --test test/*.test.js`. Run it before every push.
 - `npm run data`: rebuild `src/data/*.json` from the KBL files (`tools/kbl_to_harness.py`, `tools/real_kbl.py`, needs numpy).
 - Video edits: `tools/video/vtool.swift` (AVFoundation; ffmpeg is not installed). See its header.

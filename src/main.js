@@ -1,4 +1,4 @@
-// Formboard VR: wires the pure core (session, router) to the three.js scene and the pointers.
+// Formboard XR: wires the pure core (session, router) to the three.js scene and the pointers.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -707,7 +707,7 @@ const views = {
 
 function refresh() {
   if (!H.session) {
-    panel.draw((g) => header(g, 'FORMBOARD VR', t('loadingHarness')));
+    panel.draw((g) => header(g, 'FORMBOARD XR', t('loadingHarness')));
     return;
   }
   panel.draw(ui.setup ? views['setup_' + ui.setup] : views[H.session.state]);
