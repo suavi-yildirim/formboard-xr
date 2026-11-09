@@ -37,6 +37,9 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
   Its shape is computed per frame (`heldwire.js`); a Verlet rope folded and stuck on the board.
 - Board sized to the harness (harness stays 1:1), tilted like a desk easel on the bench, within reach.
 - Errors count only for a wrong branch or a skipped peg. Passing near other pegs in the corridor is fine.
+- Per-hand state must not outlive the press that set it. The "this press is on the panel" mark
+  (`core/press.js`) once stayed set, so the hand that pressed a menu button (usually the right) could
+  never grab a wire again. When one hand fails and the other works, look for such leftover state first.
 
 ## Data facts
 

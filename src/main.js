@@ -9,6 +9,7 @@ import { RoutingAttempt, GRAB_MM, neighbourMap } from './core/router.js';
 
 const TIP_GRAB_MM = 30; // fingertips must be this close to the wire end (or a ghost peg) to take it
 import { Session, QA_ITEMS } from './core/session.js';
+import { panelPress } from './core/press.js';
 import { buildWorkshop } from './scene/workshop.js';
 import { Board } from './scene/board.js';
 import { WireLayer } from './scene/wires.js';
@@ -570,6 +571,7 @@ function frame() {
     const hb = mouse && H.board ? p.raycaster.intersectObject(H.board.surface)[0] : null;
     const panelFirst = !!hp && (!hb || hp.distance < hb.distance);
     p.panelId = panelFirst ? hitPanel.hit(hp.uv) : null;
+    p.pressOnPanel = panelPress(p.pressOnPanel, { justPressed: p.justPressed, pressed: p.pressed || p.pinching, nearBoard, panelFirst });
     if (mouse) {
       const mm = !panelFirst && hb ? H.board.toMm(hb.point) : null;
       const pressed = p.pressed && !p.pressOnPanel;
@@ -584,7 +586,6 @@ function frame() {
     if (p.panelId) hover.set(hitPanel, p.panelId);
     if (p.justPressed && !nearBoard) {
       sfx.unlock();
-      p.pressOnPanel = panelFirst;
       if (p.panelId) onButton(p.panelId);
     }
     if (p.work.justPressed && H.session) { sfx.unlock(); onBoardPress(p); }
