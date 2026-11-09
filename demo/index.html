@@ -37,13 +37,17 @@
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
     .video { position: relative; aspect-ratio: 16 / 9; background: #000; }
     .video video { width: 100%; height: 100%; display: block; object-fit: cover; }
-    .controls { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px; } /* top: the MR captions sit at the bottom */
-    .controls button { border: 0; border-radius: 999px; padding: 6px 12px; background: rgba(14,18,25,0.8);
-                       color: var(--text); font: 600 13px system-ui, sans-serif; cursor: pointer; }
-    .controls button:hover { background: rgba(14,18,25,0.95); }
+    /* below the video, next to the title: the MR videos carry captions and logos in their corners */
+    .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+    .head h2 { margin: 2px 0 0; }
+    .controls { display: flex; gap: 6px; flex-shrink: 0; }
+    .controls button { border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; background: transparent;
+                       color: var(--text); font: 600 12px system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+    .controls button:hover { background: var(--line); }
     .sound[aria-pressed="true"] { background: var(--accent); color: #0d1117; }
     .body { padding: 14px 16px 18px; }
     .body h2 { margin: 0 0 4px; font-size: 18px; }
+    .body .head h2 { margin: 2px 0 0; }
     .body p { margin: 0; color: var(--muted); font-size: 14px; }
     .facts { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
     .fact { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; color: var(--muted); font-size: 14px; }
@@ -79,10 +83,9 @@
     <article class="card">
       <div class="video">
         <video src="media/wiring.mp4" poster="media/wiring.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2 data-i18n="wiringTitle">Wiring by hand</h2>
+        <div class="head"><h2 data-i18n="wiringTitle">Wiring by hand</h2><div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div></div>
         <p data-i18n="wiringText">Pinch the wire end and pull it along the pegs. The wire grows to your fingertips, and each correct peg snaps green with a click.</p>
       </div>
     </article>
@@ -90,10 +93,9 @@
     <article class="card">
       <div class="video">
         <video src="media/formboard.mp4" poster="media/formboard.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2 data-i18n="boardTitle">Finished formboard</h2>
+        <div class="head"><h2 data-i18n="boardTitle">Finished formboard</h2><div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div></div>
         <p data-i18n="boardText">The whole run: the menu (harness, variant, mode), setting the guide pegs, <i>Show me</i> drawing the route, a wrong peg flashing red, the last wire, the quality check, and the summary with time, errors and hints per wire.</p>
       </div>
     </article>
@@ -101,10 +103,9 @@
     <article class="card">
       <div class="video">
         <video src="media/car.mp4" poster="media/car.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2 data-i18n="carTitle">Real KBL data from an example car</h2>
+        <div class="head"><h2 data-i18n="carTitle">Real KBL data from an example car</h2><div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div></div>
         <p data-i18n="carText">The public VW Old Beetle harness from its KBL file, at 1:1: 183 segments from the KBL centre lines. Orange is the engine-compartment ignition harness that gets built on the formboard, shown where it sits in the car.</p>
       </div>
     </article>
@@ -119,30 +120,27 @@
     <article class="card">
       <div class="video">
         <video src="media/mr-pegs.mp4" poster="media/mr-pegs.jpg" muted loop playsinline preload="none"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2 data-i18n="mrPegsTitle">Pegs and the first wires</h2>
+        <div class="head"><h2 data-i18n="mrPegsTitle">Pegs and the first wires</h2><div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div></div>
         <p data-i18n="mrPegsText">Pinch the guide pegs into the board, then route the first wires. Each correct peg snaps green, with a click and a haptic tick.</p>
       </div>
     </article>
     <article class="card">
       <div class="video">
         <video src="media/mr-wiring.mp4" poster="media/mr-wiring.jpg" muted loop playsinline preload="none"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2 data-i18n="mrWiringTitle">Dense branches, wire by wire</h2>
+        <div class="head"><h2 data-i18n="mrWiringTitle">Dense branches, wire by wire</h2><div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div></div>
         <p data-i18n="mrWiringText">Through the busy branch area to the last wire. The next peg glows, and the bundles build up as on a real formboard.</p>
       </div>
     </article>
     <article class="card">
       <div class="video">
         <video src="media/mr-finished.mp4" poster="media/mr-finished.jpg" muted loop playsinline preload="none"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
       </div>
       <div class="body">
-        <h2 data-i18n="mrDoneTitle">Finished board and the car at 1:1</h2>
+        <div class="head"><h2 data-i18n="mrDoneTitle">Finished board and the car at 1:1</h2><div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div></div>
         <p data-i18n="mrDoneText">The complete harness, the quality check, and the VW vehicle harness on the floor of the room, with the built harness in orange.</p>
       </div>
     </article>
@@ -242,7 +240,7 @@
   setView(tokens.includes('mr') ? 'mr' : 'vr', false);
 
   // Fullscreen per video (iPhone Safari only supports fullscreen on the video element itself).
-  for (const card of document.querySelectorAll('.video')) {
+  for (const card of document.querySelectorAll('.card')) {
     const video = card.querySelector('video');
     card.querySelector('.full').addEventListener('click', () => {
       if (video.requestFullscreen) video.requestFullscreen();
@@ -255,7 +253,7 @@
   });
 
   // One video with sound at a time; the others stay muted. All keep looping.
-  const cards = [...document.querySelectorAll('.video')];
+  const cards = [...document.querySelectorAll('.card')];
   for (const card of cards) {
     const video = card.querySelector('video'), btn = card.querySelector('.sound');
     btn.addEventListener('click', () => {

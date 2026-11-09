@@ -314,9 +314,20 @@ case "montage":
 case "caption":
   // caption <in> <out.mp4> <captions.json> <kbps>: re-encode with captions drawn onto the frames.
   // JSON: [{"s": start, "e": end, "t": "title", "d": "second line", "card": false}], times in seconds of <in>.
+  // A logo entry: {"s", "e", "t": "", "img": "file.png", "pos": "tl" | "tr", "h": height in 1280-wide px,
+  // "badge": true for a white rounded plate behind it}.
   // Normal captions are a dark box at the bottom left with a cyan bar; "card": true dims the frame and
   // centres the text (title cards). Each fades in and out over 0.35 s.
-  struct Cap: Decodable { let s: Double; let e: Double; let t: String; let d: String?; let card: Bool? }
+  struct Cap: Decodable { let s: Double; let e: Double; let t: String; let d: String?; let card: Bool?
+                          let img: String?; let pos: String?; let h: Double?; let badge: Bool? }
+  var images: [String: CGImage] = [:]
+  func image(_ path: String) -> CGImage {
+    if let i = images[path] { return i }
+    guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+          let i = CGImageSourceCreateImageAtIndex(src, 0, nil) else { fail("cannot read image \(path)") }
+    images[path] = i
+    return i
+  }
   let out = URL(fileURLWithPath: args[3])
   let caps = try! JSONDecoder().decode([Cap].self, from: Data(contentsOf: URL(fileURLWithPath: args[4])))
   let kbps = Int(args[5])!
@@ -349,6 +360,21 @@ case "caption":
   func width(_ l: CTLine) -> CGFloat { CGFloat(CTLineGetTypographicBounds(l, nil, nil, nil)) }
   func draw(_ ctx: CGContext, _ cap: Cap, _ alpha: CGFloat) {
     ctx.saveGState(); ctx.setAlpha(alpha)
+    if let path = cap.img {
+      let img = image(path)
+      let h = CGFloat(cap.h ?? 60) * u, w = h * CGFloat(img.width) / CGFloat(img.height)
+      let m = 28 * u, pad = cap.badge == true ? 12 * u : 0
+      let x = cap.pos == "tr" ? W - m - w - pad : m + pad, y = H - m - h - pad
+      if cap.badge == true {
+        ctx.setFillColor(CGColor(gray: 1, alpha: 0.94))
+        ctx.addPath(CGPath(roundedRect: CGRect(x: x - pad, y: y - pad, width: w + 2 * pad, height: h + 2 * pad), cornerWidth: 10 * u, cornerHeight: 10 * u, transform: nil))
+        ctx.fillPath()
+      }
+      ctx.interpolationQuality = .high
+      ctx.draw(img, in: CGRect(x: x, y: y, width: w, height: h))
+      ctx.restoreGState()
+      return
+    }
     let title = line(cap.t, font(cap.card == true ? 46 : 34, true), CGColor(gray: 1, alpha: 1))
     let sub = cap.d.map { line($0, font(cap.card == true ? 28 : 24, false), CGColor(red: 0.78, green: 0.83, blue: 0.9, alpha: 1)) }
     if cap.card == true {
