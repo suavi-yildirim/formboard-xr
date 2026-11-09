@@ -100,7 +100,7 @@ if 'pegs' in which: build('mr-pegs', SETUP[2:] + PEGS, 3000)
 if 'wiring' in which: build('mr-wiring', WIRING, 3000)
 if 'finish' in which: build('mr-finished', FINISH, 3000)
 if 'full' in which:
-    build('formboard-xr-mr-full', TEASER + SETUP + PEGS + WIRING + FINISH, 4000, cards=[
+    build('formboard-xr-mr-full', TEASER + SETUP[2:] + PEGS + WIRING + FINISH, 4000, cards=[
         (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
         (-3.2, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
     ])
