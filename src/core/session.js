@@ -54,7 +54,7 @@ export class Session {
   beginRouting(now) {
     this.state = 'route';
     this.index = 0;
-    this.metrics = this.wires.map((w) => ({ wire: w.id, start: null, end: null, errors: 0, hints: 0 }));
+    this.metrics = this.wires.map((w) => ({ wire: w.id, cavity: w.to, start: null, end: null, errors: 0, cavity_errors: 0, hints: 0 }));
     this.metrics[0].start = now;
   }
 
@@ -62,11 +62,13 @@ export class Session {
     if (this.state === 'route') this.metrics[this.index].hints++;
   }
 
-  wireDone(errors, now) {
+  // errors: routing errors (wrong peg); cavityErrors: wrong cavities while inserting the end.
+  wireDone(errors, now, cavityErrors = 0) {
     if (this.state !== 'route') return;
     const m = this.metrics[this.index];
     m.end = now;
     m.errors = errors;
+    m.cavity_errors = cavityErrors;
     if (this.index + 1 < this.wires.length) {
       this.index++;
       this.metrics[this.index].start = now;
@@ -80,12 +82,12 @@ export class Session {
     if (this.state === 'qa') {
       this.state = 'route';
     } else if (this.state === 'route' && this.index > 0) {
-      this.metrics[this.index] = { ...this.metrics[this.index], start: null, end: null, errors: 0, hints: 0 };
+      this.metrics[this.index] = { ...this.metrics[this.index], start: null, end: null, errors: 0, cavity_errors: 0, hints: 0 };
       this.index--;
     } else {
       return;
     }
-    this.metrics[this.index] = { ...this.metrics[this.index], start: now, end: null, errors: 0, hints: 0 };
+    this.metrics[this.index] = { ...this.metrics[this.index], start: now, end: null, errors: 0, cavity_errors: 0, hints: 0 };
   }
 
   checkQa(i, now) {
@@ -109,8 +111,9 @@ export class Session {
       mode: this.mode,
       total_s: round((this.finishedAt - this.startedAt) / 1000),
       errors: done.reduce((a, m) => a + m.errors, 0),
+      cavity_errors: done.reduce((a, m) => a + m.cavity_errors, 0),
       hints: done.reduce((a, m) => a + m.hints, 0),
-      wires: done.map((m) => ({ wire: m.wire, time_s: round((m.end - m.start) / 1000), errors: m.errors, hints: m.hints })),
+      wires: done.map((m) => ({ wire: m.wire, cavity: m.cavity, time_s: round((m.end - m.start) / 1000), errors: m.errors, cavity_errors: m.cavity_errors, hints: m.hints })),
     };
   }
 }

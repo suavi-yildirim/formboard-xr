@@ -160,3 +160,20 @@ test('session: back undoes the previous wire', () => {
   assert.equal(s.metrics[0].end, null);
   assert.equal(s.metrics[0].start, 1500);
 });
+
+test('session: cavity errors per wire, in the summary, and reset by back', () => {
+  const s = new Session(vw);
+  s.start(variants(vw)[0], 'guided', 0);
+  s.setAllPegs(0);
+  s.wireDone(1, 1000, 2);
+  assert.equal(s.metrics[0].cavity_errors, 2);
+  s.back(1500);
+  assert.equal(s.metrics[0].cavity_errors, 0);
+  s.wireDone(0, 2000, 1);
+  while (s.state === 'route') s.wireDone(0, 3000);
+  QA_ITEMS.forEach((_, i) => s.checkQa(i, 4000));
+  const sum = s.summary();
+  assert.equal(sum.cavity_errors, 1);
+  assert.equal(sum.wires[0].cavity_errors, 1);
+  assert.equal(sum.wires[0].cavity, s.wires[0].to);
+});
