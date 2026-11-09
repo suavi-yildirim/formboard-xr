@@ -58,14 +58,25 @@ LOGOS = [  # FAU (dark blue PNG, transparent) top left, FAPS (green) top right, 
 ]
 LOGO_S = 4.5
 
-def build(name, segs, kbps, cards=()):
+def build(name, segs, kbps, cards=(), chapters=None, stamps=()):
+    """chapters: {caption key: (step number, 'Name')} for step chips and a progress bar (creative cut).
+    stamps: [(raw time, text, 'ok' | 'err')] pop up at that moment of the recording."""
     ranges = ','.join(f'{s}-{e}' + (f'@{c}' if c else '') for s, e, c, _ in segs)
     os.makedirs(WORK, exist_ok=True)
     raw = f'{WORK}/{name}_raw.mp4'
     subprocess.run([VT, 'montage', IN, raw, ranges, str(FADE), '1280', '720', '9000'], check=True)
     caps, t = [], 0.0
+    extra, chap_at = [], []
     for i, (s, e, c, key) in enumerate(segs):
         d = e - s
+        for rt, text, col in stamps:
+            if s + 0.2 <= rt <= e - 0.2:  # the chime comes just before the cut: the pop-up may run over the fade
+                if extra and extra[-1]['e'] > t + rt - s: extra[-1]['e'] = t + rt - s - 0.05
+                extra.append({'s': t + rt - s, 'e': t + rt - s + 1.4, 't': text, 'style': 'stamp', 'colour': col})
+        if chapters and key in chapters:
+            n, label = chapters[key]
+            if not chap_at or chap_at[-1][0] != n: chap_at.append([n, label, t + (0.15 if i else 0.3), 0])
+            chap_at[-1][3] = t + d - FADE - 0.05
         start, end = t + (0.15 if i else 0.3), t + d - FADE - 0.05
         # German on top (large), English below
         if key and (not caps or caps[-1]['t'] != CAP[key][1]):
@@ -75,23 +86,34 @@ def build(name, segs, kbps, cards=()):
         t += d - FADE
     total = t + FADE
     for c in cards:
-        caps.append({'s': c[0] if c[0] >= 0 else total + c[0], 'e': c[1] if c[1] > 0 else total + c[1], 't': c[2], 'd': c[3], 'card': True})
+        # a 5th field False: a normal caption box instead of a darkened title card
+        caps.append({'s': c[0] if c[0] >= 0 else total + c[0], 'e': c[1] if c[1] > 0 else total + c[1], 't': c[2], 'd': c[3],
+                     'card': c[4] if len(c) > 4 else True, 'fixed': True})
     # keep normal captions out of title cards
     for c in caps:
-        if c.get('card'): continue
+        if c.get('fixed'): continue
         for k in caps:
-            if k.get('card') and c['s'] < k['e'] and c['e'] > k['s']:
+            if k.get('fixed') and c['s'] < k['e'] and c['e'] > k['s']:
                 if k['s'] <= c['s']: c['s'] = k['e'] + 0.2
                 else: c['e'] = k['s'] - 0.2
     caps = [c for c in caps if c['e'] - c['s'] > 1.0]
+    if chapters:
+        steps = max(n for n, _ in chapters.values())
+        card_end = max([k['e'] for k in caps if k.get('fixed') and k['s'] < 1] + [0])
+        card_start = min([k['s'] for k in caps if k.get('fixed') and k['s'] > 1] + [total])
+        for n, label, a, b in chap_at:
+            a, b = max(a, card_end + 0.2), min(b, card_start - 0.2)
+            if b - a > 1: extra.append({'s': a, 'e': b, 't': f'{n} / {steps}  ·  {label}', 'style': 'chip'})
+        extra.append({'s': 0.0, 'e': total, 't': '', 'style': 'bar', 'marks': [a / total for _, _, a, _ in chap_at[1:]]})
+    caps += extra
     # over a darkened title card the dark blue FAU logo needs a white plate
-    caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l, 'badge': bool(cards) and l['pos'] == 'tl'} for l in LOGOS]
+    logo_s = 3.3 if chapters else LOGO_S  # creative cut: logos leave with the title card, the step chip follows
+    caps += [{'s': 0.0, 'e': logo_s, 't': '', **l, 'badge': bool(cards) and l['pos'] == 'tl'} for l in LOGOS]
     if cards:  # the end card shows the logos again
-        # on the darkened end card the dark blue FAU logo needs a white plate
         caps += [{'s': total - 3.6, 'e': total - 0.05, 't': '', **l, 'badge': l['pos'] == 'tl'} for l in LOGOS]
     jf = f'{WORK}/{name}.json'
     json.dump(caps, open(jf, 'w'), ensure_ascii=False, indent=1)
-    out = f"{OUTDIR['full'] if name.endswith('full') else ROOT + '/demo/media'}/{name}.mp4"
+    out = f"{OUTDIR['full'] if name.startswith('formboard-xr') else ROOT + '/demo/media'}/{name}.mp4"
     subprocess.run([VT, 'caption', raw, out, jf, str(kbps)], check=True)
     print(name, round(total, 1), 's')
 
@@ -99,9 +121,30 @@ which = sys.argv[1:] or ['pegs', 'wiring', 'finish', 'full']
 if 'pegs' in which: build('mr-pegs', SETUP[2:] + PEGS, 3000)
 if 'wiring' in which: build('mr-wiring', WIRING, 3000)
 if 'finish' in which: build('mr-finished', FINISH, 3000)
+# Full edits: teaser, harness choice, pegs, wiring, finish; the car view starts with the turn from the board
+# and the video ends on the sign above the car (2:55), under the end card (from about 1:11 to 1:15).
+FULL = TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1] + [(162.9, 175.0, None, 'incar')]
+CARDS = [
+    (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
+    (-3.6, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
+]
 if 'full' in which:
-    # full edit: the car view starts 3 s earlier (the turn from the board), so the end card comes at about 1:11
-    build('formboard-xr-mr-full', TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1] + [(163.9, 176.0, None, 'incar')], 4000, cards=[
-        (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
-        (-3.6, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
-    ])
+    build('formboard-xr-mr-full', FULL, 4000, cards=CARDS)
+if 'creative' in which:
+    # Same story with more on screen: step chips (1-5), a progress bar with chapter marks, a pop-up at every
+    # finished wire and at the wrong peg, and a closer crop on the wrong-peg wire.
+    CAP['pegs'] = ('22 guide pegs, placed where the KBL branches', '22 Führungsstifte, gesetzt nach den KBL-Abzweigen')
+    CAP['route'] = ('18 wires, each at its true KBL length', '18 Leitungen, jede in ihrer echten KBL-Länge')
+    CAP['done'] = ('Flattened 1:1 from 3D: 30 segments, 0 % length error', '1:1 aus 3D abgewickelt: 30 Segmente, 0 % Längenfehler')
+    CAP['incar'] = ('Same KBL file: the harness in the car, 1:1', 'Dieselbe KBL-Datei: der Leitungssatz im Fahrzeug, 1:1')
+    segs = [(116.9, 120.3, '620:100:1000', k) if (a, b) == (116.9, 120.3) else (a, b, c, k) for a, b, c, k in FULL]
+    chapters = {'menu': (1, 'Wählen'), 'pegs': (2, 'Stifte setzen'),
+                'route': (3, 'Verlegen'), 'snap': (3, 'Verlegen'), 'grow': (3, 'Verlegen'), 'wrong': (3, 'Verlegen'),
+                'dense': (3, 'Verlegen'), 'bundle': (3, 'Verlegen'), 'last': (3, 'Verlegen'),
+                'done': (4, 'Prüfen'), 'qa': (4, 'Prüfen'), 'incar': (5, 'Im Fahrzeug')}
+    ok = lambda n: f'✓ Leitung {n}'
+    stamps = [(54.8, ok(1), 'ok'), (61.4, ok(2), 'ok'), (69.4, ok(3), 'ok'), (119.2, '✗ Falscher Stift · Fehler gezählt', 'err'),
+              (83.0, ok(5), 'ok'), (98.7, ok(6), 'ok'), (152.8, ok(14), 'ok'), (154.8, ok(15), 'ok'), (156.8, ok(16), 'ok'),
+              (158.7, ok(17), 'ok'), (160.0, '✓ 18 / 18 · komplett', 'ok'),
+              (187.9, '☑ Stecker', 'ok'), (188.9, '☑ Bündel', 'ok'), (191.6, '☑ Farben', 'ok')]
+    build('formboard-xr-mr-creative', segs, 4000, cards=CARDS, chapters=chapters, stamps=stamps)

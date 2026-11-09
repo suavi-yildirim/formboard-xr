@@ -128,7 +128,7 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
   poster may be seen. Cut on whole actions only: each part runs from just before a grab to just after the "wire done"
   chime (find them with `vtool levels <raw> 0.05`); no speed-ups. FAU (dark blue PNG, no plate; 84 px at 720p) top left and FAPS
   (green) top right during the first 4.5 s, from `FAPS_und_FAU_Logos/_Archiv` (folder gitignored; the EMF files
-  can't be converted on this Mac). The full MR edit (`quest3-videos/formboard-xr-mr-full.mp4`, about 64 s) stays local.
+  can't be converted on this Mac). The full MR edit (`quest3-videos/formboard-xr-mr-full.mp4`, 1:15, ends on the car sign under a darkened end card) and a creative cut (`formboard-xr-mr-creative.mp4`: step chips, progress bar, pop-ups; `mr_clips.py creative`) stay local.
   Video buttons sit under each video, next to its title: captions and logos fill the video corners.
 - VR section order: wiring by hand, finished formboard, real KBL data from an example car. Each video has a sound
   button (one with sound at a time) and a fullscreen button.

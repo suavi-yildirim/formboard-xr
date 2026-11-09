@@ -316,10 +316,13 @@ case "caption":
   // JSON: [{"s": start, "e": end, "t": "title", "d": "second line", "card": false}], times in seconds of <in>.
   // A logo entry: {"s", "e", "t": "", "img": "file.png", "pos": "tl" | "tr", "h": height in 1280-wide px,
   // "badge": true for a white rounded plate behind it}.
+  // "style": "chip" (pill at the top centre, e.g. a step name), "stamp" (pill that pops in below it; "colour":
+  // "ok" | "err"), "bar" (progress line along the bottom from s to e, with "marks" as fractions for chapters).
   // Normal captions are a dark box at the bottom left with a cyan bar; "card": true dims the frame and
   // centres the text (title cards). Each fades in and out over 0.35 s.
   struct Cap: Decodable { let s: Double; let e: Double; let t: String; let d: String?; let card: Bool?
-                          let img: String?; let pos: String?; let h: Double?; let badge: Bool? }
+                          let img: String?; let pos: String?; let h: Double?; let badge: Bool?
+                          let style: String?; let colour: String?; let marks: [Double]? }
   var images: [String: CGImage] = [:]
   func image(_ path: String) -> CGImage {
     if let i = images[path] { return i }
@@ -358,8 +361,36 @@ case "caption":
     CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: f, .foregroundColor: c]))
   }
   func width(_ l: CTLine) -> CGFloat { CGFloat(CTLineGetTypographicBounds(l, nil, nil, nil)) }
-  func draw(_ ctx: CGContext, _ cap: Cap, _ alpha: CGFloat) {
+  func draw(_ ctx: CGContext, _ cap: Cap, _ alpha: CGFloat, _ t: Double) {
     ctx.saveGState(); ctx.setAlpha(alpha)
+    if cap.style == "bar" {
+      let p = CGFloat((t - cap.s) / (cap.e - cap.s)), hgt = 6 * u
+      ctx.setFillColor(CGColor(red: 0.05, green: 0.07, blue: 0.1, alpha: 0.7)); ctx.fill(CGRect(x: 0, y: 0, width: W, height: hgt))
+      ctx.setFillColor(CGColor(red: 0.36, green: 0.88, blue: 1, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: W * p, height: hgt))
+      ctx.setFillColor(CGColor(gray: 1, alpha: 0.9))
+      for m in cap.marks ?? [] { ctx.fill(CGRect(x: W * CGFloat(m) - u, y: 0, width: 2 * u, height: hgt + 3 * u)) }
+      ctx.restoreGState(); return
+    }
+    if cap.style == "chip" || cap.style == "stamp" {
+      let stamp = cap.style == "stamp"
+      let l = line(cap.t, font(stamp ? 28 : 21, true), CGColor(gray: 1, alpha: 1))
+      let tw = width(l), padX = (stamp ? 22 : 18) * u, bh = (stamp ? 50 : 38) * u
+      let cy = H - (stamp ? 104 : 46) * u
+      let k: CGFloat = stamp ? 1 + 0.3 * CGFloat(max(0, 1 - (t - cap.s) / 0.18)) : 1 // pop in
+      ctx.translateBy(x: W / 2, y: cy); ctx.scaleBy(x: k, y: k)
+      let box = CGRect(x: -tw / 2 - padX, y: -bh / 2, width: tw + 2 * padX, height: bh)
+      let bg = cap.colour == "ok" ? CGColor(red: 0.13, green: 0.62, blue: 0.33, alpha: 0.95)
+             : cap.colour == "err" ? CGColor(red: 0.85, green: 0.2, blue: 0.17, alpha: 0.95)
+             : CGColor(red: 0.05, green: 0.07, blue: 0.1, alpha: 0.82)
+      ctx.setFillColor(bg)
+      ctx.addPath(CGPath(roundedRect: box, cornerWidth: bh / 2, cornerHeight: bh / 2, transform: nil)); ctx.fillPath()
+      if !stamp {
+        ctx.setStrokeColor(CGColor(red: 0.36, green: 0.88, blue: 1, alpha: 0.9)); ctx.setLineWidth(1.5 * u)
+        ctx.addPath(CGPath(roundedRect: box, cornerWidth: bh / 2, cornerHeight: bh / 2, transform: nil)); ctx.strokePath()
+      }
+      ctx.textPosition = CGPoint(x: -tw / 2, y: -(stamp ? 10 : 7.5) * u); CTLineDraw(l, ctx)
+      ctx.restoreGState(); return
+    }
     if let path = cap.img {
       let img = image(path)
       let h = CGFloat(cap.h ?? 60) * u, w = h * CGFloat(img.width) / CGFloat(img.height)
@@ -411,7 +442,7 @@ case "caption":
           let ctx = CGContext(data: CVPixelBufferGetBaseAddress(px), width: CVPixelBufferGetWidth(px), height: CVPixelBufferGetHeight(px),
                               bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(px), space: CGColorSpaceCreateDeviceRGB(),
                               bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
-          for c in active { draw(ctx, c, CGFloat(min(1, (t - c.s) / 0.35, (c.e - t) / 0.35))) }
+          for c in active { let f = c.style == "stamp" ? 0.15 : 0.35; draw(ctx, c, CGFloat(min(1, (t - c.s) / f, (c.e - t) / f)), t) }
           CVPixelBufferUnlockBaseAddress(px, [])
         }
       }
