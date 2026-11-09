@@ -30,6 +30,10 @@ VW = ROOT / "data" / "vw"
 VW_MOVO = VW / "kblxml_2.3sr-1_000971619_ltgs_movo_170718.kbl"
 VW_FULL = VW / "kblxml_2.4sr-1_tab016120_modulare_ltgs._160718.kbl"
 OUT = ROOT / "src" / "data"
+# A short piece of the full vehicle harness with real multi-pole connectors, for cavity training:
+# 5-pole XA.V.1 and 8-pole XA.E.1, a ground point and a splice. Terminal 53 (DIN 72552) is the wiper
+# motor, so the piece is named after it; the KBL does not name the part.
+WIPER_KEEP = {"XA.V.1", "XA.E.1", "278", "B174"}
 VW_SOURCE = "VW VOBES \"Old Beetle\" sample (prostep ivip ECAD wiki), CC BY-SA 4.0"
 
 
@@ -89,7 +93,9 @@ def build(kbl, layout):
             if n["id"] not in kbl["connectors"]:
                 problems.append(f"layout connector {n['id']} not in KBL")
             node["label"] = kbl["connectors"].get(n["id"], n["id"])
-            node.update(shape="housing", housing_colour="BK", cavities=kbl["cavities"].get(n["id"], 2))
+            count = kbl["cavities"].get(n["id"], 2)
+            node.update(shape="housing", housing_colour="BK", cavities=count,
+                        cavity_numbers=[str(i) for i in range(1, count + 1)])
         nodes.append(node)
 
     wires = []
@@ -98,7 +104,11 @@ def build(kbl, layout):
         if w is None:
             problems.append(f"connection uses unknown wire {c['wire']}")
             continue
-        a, b = (e.split(".")[0] for e in c["ends"])
+        ends = c["ends"]
+        a, b = (e.split(".")[0] for e in ends)
+        # the end with more cavities is the one the user inserts (see real_kbl.formboard)
+        if kbl["cavities"].get(a, 1) > kbl["cavities"].get(b, 1):
+            ends, a, b = ends[::-1], b, a
         path = shortest_path(adj, a, b)
         if path is None:
             problems.append(f"no board path for {c['wire']} ({a} -> {b})")
@@ -106,7 +116,8 @@ def build(kbl, layout):
         wires.append({
             "id": c["wire"], "colour": w["colour"],
             "cross_section_mm2": float(w["cross_section_mm2"]), "length_mm": int(w["length_mm"]),
-            "signal": c["signal"], "from": c["ends"][0], "to": c["ends"][1],
+            "signal": c["signal"], "from": ends[0], "to": ends[1],
+            "from_cavity": ends[0].split(".")[1], "to_cavity": ends[1].split(".")[1],
             "from_node": path[0], "to_node": path[-1], "path": path,
         })
 
@@ -118,23 +129,42 @@ def build(kbl, layout):
     return harness, problems
 
 
+def cavity_problems(h):
+    """Every wire end into a connector with 2+ cavities needs a cavity of that connector."""
+    out = []
+    nodes = {n["id"]: n for n in h["nodes"]}
+    for w in h["wires"]:
+        for node, cav in ((w["from_node"], w["from_cavity"]), (w["to_node"], w["to_cavity"])):
+            n = nodes[node]
+            if n.get("cavities", 1) >= 2 and cav not in n.get("cavity_numbers", []):
+                out.append(f"{h['id']}: wire {w['id']} ends in cavity {cav!r}, not one of {node} {n.get('cavity_numbers')}")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
     door, problems = build(read_kbl(KBL), json.loads(LAYOUT.read_text(encoding="utf-8")))
     movo = formboard(VW_MOVO, "Engine compartment ignition harness (VW Old Beetle)", VW_SOURCE)
-    if movo["skipped_connections"]:
-        problems.append(f"VW: connections without a board path: {movo['skipped_connections']}")
+    wiper = formboard(VW_FULL, "Wiper harness, short example piece (VW Old Beetle)", VW_SOURCE, keep=WIPER_KEEP)
+    for name, h in (("VW", movo), ("VW wiper", wiper)):
+        if h["skipped_connections"]:
+            problems.append(f"{name}: connections without a board path: {h['skipped_connections']}")
+    for h in (door, movo, wiper):
+        problems += cavity_problems(h)
     for p in problems:
         print("problem:", p, file=sys.stderr)
     if problems:
         sys.exit(1)
-    outputs = {"door.json": door, "vw_movo.json": movo, "vw_vehicle.json": vehicle(VW_FULL, VW_MOVO)}
-    index = [{"file": "vw_movo.json", "label": "VW ignition harness", "note": "real KBL"},
+    outputs = {"door.json": door, "vw_movo.json": movo, "vw_wiper.json": wiper,
+               "vw_vehicle.json": vehicle(VW_FULL, VW_MOVO, {"vw_wiper.json": WIPER_KEEP})}
+    index = [{"file": "vw_wiper.json", "label": "VW wiper harness", "note": "real KBL, short, cavities"},
+             {"file": "vw_movo.json", "label": "VW ignition harness", "note": "real KBL"},
              {"file": "door.json", "label": "Door harness", "note": "fictitious, variants"}]
     if args.check:
         print(f"ok: door {len(door['wires'])} wires, VW {len(movo['wires'])} wires, flattening {movo['flattening']}")
+        print(f"ok: VW wiper {len(wiper['wires'])} wires, flattening {wiper['flattening']}")
         return
     OUT.mkdir(parents=True, exist_ok=True)
     for name, data in outputs.items():

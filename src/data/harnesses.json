@@ -1,5 +1,10 @@
 [
  {
+  "file": "vw_wiper.json",
+  "label": "VW wiper harness",
+  "note": "real KBL, short, cavities"
+ },
+ {
   "file": "vw_movo.json",
   "label": "VW ignition harness",
   "note": "real KBL"

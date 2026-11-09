@@ -137,12 +137,15 @@ def best_rotation(P):
     return {k: best[1] @ v for k, v in P.items()}
 
 
-def formboard(path, title, source):
+def formboard(path, title, source, keep=None):
+    """keep: optional set of connector Ids. Then only the wires between those connectors are used,
+    with the segments they run along (a small piece cut out of a larger harness)."""
     k = Kbl(path)
     h = k.h
     # connectors and contact points
     conn_name, cp_owner, cp_cavity, conn_look = {}, {}, {}, {}
-    for c in h.findall("Connector_occurrence"):
+    occurrences = [c for c in h.findall("Connector_occurrence") if keep is None or c.findtext("Id") in keep]
+    for c in occurrences:
         conn_name[c.get("id")] = (c.findtext("Id"), c.findtext("Description") or "")
         conn_look[c.get("id")] = connector_look(k, c)
         for cp in c.findall("Contact_points"):
@@ -168,7 +171,18 @@ def formboard(path, title, source):
                     conn_name[cid] = (conn_name[cid][0], e.findtext("Description") or "")
     conn_node = {v: n for n, v in node_conn.items()}
 
-    segs = k.root.findall("Segment")
+    routing = {r.findtext("Routed_wire"): (r.findtext("Segments") or "").split() for r in k.root.findall("Routing")}
+    connections = h.findall("Connection")
+    if keep is not None:
+        connections = [c for c in connections
+                       if all(e.findtext("Contact_point") in cp_owner for e in c.findall("Extremities"))]
+        used = {s for c in connections for s in routing.get(c.get("id"), [])}
+    segs = [s for s in k.root.findall("Segment") if keep is None or s.get("id") in used]
+    if keep is not None:
+        on = {n for s in segs for n in (s.findtext("Start_node"), s.findtext("End_node"))}
+        nodes3 = {n: p for n, p in nodes3.items() if n in on}
+        node_conn = {n: c for n, c in node_conn.items() if n in on}
+        conn_node = {v: n for n, v in node_conn.items()}
     edges = [(s.findtext("Start_node"), s.findtext("End_node")) for s in segs]
     lengths = [k.number(s, "Virtual_length") for s in segs]
     P = best_rotation(flatten(nodes3, edges, lengths))
@@ -228,16 +242,19 @@ def formboard(path, title, source):
         seg_chain[s.get("id")] = chain
 
     # wires: routing segments -> ordered node path from the start connector
-    routing = {r.findtext("Routed_wire"): (r.findtext("Segments") or "").split() for r in k.root.findall("Routing")}
     wire_occ = {w.get("id"): w for w in h.findall("General_wire_occurrence")}
     seg_by_id = {s.get("id"): (s.findtext("Start_node"), s.findtext("End_node")) for s in segs}
     wires, skipped = [], []
-    for c in h.findall("Connection"):
+    for c in connections:
         ends = [e.findtext("Contact_point") for e in c.findall("Extremities")]
         a_conn, b_conn = (cp_owner.get(e) for e in ends)
         if a_conn is None or b_conn is None or a_conn == b_conn:
             skipped.append(c.findtext("Id"))
             continue
+        # The user inserts the target end into its cavity (the start end is shown seated), so the
+        # end with more cavities is the target: that is where a wrong cavity can be chosen.
+        if conn_look[a_conn]["cavities"] > conn_look[b_conn]["cavities"]:
+            ends, a_conn, b_conn = ends[::-1], b_conn, a_conn
         path = walk(routing.get(c.get("id"), []), seg_by_id, conn_node[a_conn], conn_node[b_conn])
         if path is None:
             skipped.append(c.findtext("Id"))
@@ -258,6 +275,7 @@ def formboard(path, title, source):
             "signal": (c.findtext("Signal_name") or "").rstrip("."),
             "from": f"{conn_name[a_conn][0]}:{cp_cavity.get(ends[0], '?')}",
             "to": f"{conn_name[b_conn][0]}:{cp_cavity.get(ends[1], '?')}",
+            "from_cavity": cp_cavity.get(ends[0], "?"), "to_cavity": cp_cavity.get(ends[1], "?"),
             "from_node": name[conn_node[a_conn]], "to_node": name[conn_node[b_conn]],
             "path": full,
         })
@@ -294,8 +312,9 @@ def connector_look(k, c):
     else:
         shape = "housing"
     colour = next((code for word, code in HOUSING_COLOURS.items() if word in up), "BK")
-    cavities = len(part.findall(".//Cavities")) if part is not None else 1
-    return {"shape": shape, "housing_colour": colour, "cavities": max(1, cavities), "part": desc}
+    numbers = [cv.findtext("Cavity_number") for cv in part.findall(".//Cavities")] if part is not None else []
+    numbers = numbers or ["1"]
+    return {"shape": shape, "housing_colour": colour, "cavities": len(numbers), "cavity_numbers": numbers, "part": desc}
 
 
 def walk(seg_ids, seg_by_id, start, goal):
@@ -323,16 +342,33 @@ def rnd(p):
 
 # --- vehicle view ---
 
-def vehicle(full_path, highlight_path):
-    """Both harnesses in vehicle coordinates, converted to viewer axes (y up), in metres."""
+def vehicle(full_path, highlight_path, pieces=None):
+    """Both harnesses in vehicle coordinates, converted to viewer axes (y up), in metres.
+    pieces: {name: set of connector Ids} cut out of the full harness (as formboard(keep=...)), each
+    shown as its own highlight."""
     full, hl = Kbl(full_path), Kbl(highlight_path)
 
-    def lines(k):
+    def lines(k, segs=None):
         out = []
-        for s in k.root.findall("Segment"):
+        for s in segs if segs is not None else k.root.findall("Segment"):
             area = k.number(s.find("Cross_section_area_information"), "Area") or 3.0
             out.append({"pts": segment_line(k, s), "r": round(max(1.5, math.sqrt(area / math.pi)), 1)})
         return out
+
+    def piece(keep):
+        """Segments and connector nodes of the wires between the kept connectors."""
+        names = {c.get("id"): c.findtext("Id") for c in full.h.findall("Connector_occurrence")}
+        cps = {cp.get("id") for c in full.h.findall("Connector_occurrence") if c.findtext("Id") in keep
+               for cp in c.findall("Contact_points")}
+        routing = {r.findtext("Routed_wire"): (r.findtext("Segments") or "").split() for r in full.root.findall("Routing")}
+        used = {sid for c in full.h.findall("Connection")
+                if all(e.findtext("Contact_point") in cps for e in c.findall("Extremities"))
+                for sid in routing.get(c.get("id"), [])}
+        segs = [s for s in full.root.findall("Segment") if s.get("id") in used]
+        on = {n for s in segs for n in (s.findtext("Start_node"), s.findtext("End_node"))}
+        conns = [(names[ref], nd) for nd in full.root.findall("Node") if nd.get("id") in on
+                 for ref in (nd.findtext("Referenced_components") or "").split() if names.get(ref) in keep]
+        return segs, conns
 
     a, b = lines(full), lines(hl)
     every = [q for s in a + b for q in s["pts"]]
@@ -351,10 +387,20 @@ def vehicle(full_path, highlight_path):
                     out.append({"label": e.findtext("Id"), "desc": e.findtext("Description") or "", "p": view(k.point(nd.findtext("Cartesian_point")))})
         return out
 
+    out_pieces = {}
+    for name, keep in (pieces or {}).items():
+        segs, conns = piece(keep)
+        out_pieces[name] = {
+            "highlight": [{"pts": [view(q) for q in s["pts"]], "r": s["r"]} for s in lines(full, segs)],
+            "connectors": [{"label": c, "desc": "", "p": view(full.point(nd.findtext("Cartesian_point")))} for c, nd in conns],
+            "highlight_id": f"{full.h.findtext('Part_number')} ({', '.join(sorted(keep))})",
+        }
+
     return {
         "full": [{"pts": [view(q) for q in s["pts"]], "r": s["r"]} for s in a],
         "highlight": [{"pts": [view(q) for q in s["pts"]], "r": s["r"]} for s in b],
         "connectors": connectors(hl),
         "full_connectors": len(connectors(full)),
         "full_id": full.h.findtext("Part_number"), "highlight_id": hl.h.findtext("Part_number"),
+        "pieces": out_pieces,
     }
