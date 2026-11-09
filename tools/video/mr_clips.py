@@ -88,7 +88,7 @@ def build(name, segs, kbps, cards=()):
     caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l, 'badge': bool(cards) and l['pos'] == 'tl'} for l in LOGOS]
     if cards:  # the end card shows the logos again
         # on the darkened end card the dark blue FAU logo needs a white plate
-        caps += [{'s': total - 3.2, 'e': total - 0.05, 't': '', **l, 'badge': l['pos'] == 'tl'} for l in LOGOS]
+        caps += [{'s': total - 3.6, 'e': total - 0.05, 't': '', **l, 'badge': l['pos'] == 'tl'} for l in LOGOS]
     jf = f'{WORK}/{name}.json'
     json.dump(caps, open(jf, 'w'), ensure_ascii=False, indent=1)
     out = f"{OUTDIR['full'] if name.endswith('full') else ROOT + '/demo/media'}/{name}.mp4"
@@ -100,7 +100,8 @@ if 'pegs' in which: build('mr-pegs', SETUP[2:] + PEGS, 3000)
 if 'wiring' in which: build('mr-wiring', WIRING, 3000)
 if 'finish' in which: build('mr-finished', FINISH, 3000)
 if 'full' in which:
-    build('formboard-xr-mr-full', TEASER + SETUP[2:] + PEGS + WIRING + FINISH, 4000, cards=[
+    # full edit: the car view starts 3 s earlier (the turn from the board), so the end card comes at about 1:11
+    build('formboard-xr-mr-full', TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1] + [(163.9, 176.0, None, 'incar')], 4000, cards=[
         (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
-        (-3.2, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
+        (-3.6, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
     ])
