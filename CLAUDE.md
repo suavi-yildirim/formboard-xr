@@ -25,8 +25,12 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
   - In VR, board work happens at the **pinch point** (`p.tip`), not by ray.
   - Rays only serve the panel and teleport.
   - The mouse uses a ray onto the board.
-- The debug handle `window.formboard` exposes `H, panel, carPanel, camera, step, load, setView, setMode, placement, station, ui,
-  beginSetup, confirmSetup, handles` (`handles.near/start/drag/end` simulate carrying with a fake `{ tip, pulse }` pointer).
+- The debug handle `window.formboard` exposes `H, panel, carPanel, camera, controls, pointers, button` (= press a panel
+  button by id), `step, inserting, attempt, load, setView, setMode, placement, station, ui, beginSetup, confirmSetup, handles`
+  (`handles.near/start/drag/end` simulate carrying with a fake `{ tip, pulse }` pointer).
+- Cavity insertion (`core/cavity.js`, `core/insert.js`, `scene/faceview.js`): after the router's `done`, a wire whose target
+  connector has 2+ cavities enters `inserting`; the magnified face view lies parallel to the board, 6 cm above it, so a
+  push towards the board is a push into the cavity. Board housings and the face view share `cavityLayout`.
 - Board and panel live in the `station` group (origin on the table top, +z towards the user). VR keeps it on the
   bench at (0, 0.74, −0.45). MR moves it onto the real table. The work light (`updateLight`) and the 1:1 car
   (`placeVehicle`, 2.5 m to the station's right, on the floor) follow it.
@@ -51,10 +55,14 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
 ## Data facts
 
 - VW Old Beetle sample (CC BY-SA 4.0) in `data/vw/`.
-  - Formboard harness: `ltgs_movo` (18 wires).
+  - Formboard harnesses: `ltgs_movo` (ignition, 18 wires) and the wiper piece cut from `modulare_ltgs`
+    (`WIPER_KEEP` in `tools/kbl_to_harness.py`: XA.V.1, XA.E.1, 278, B174; 6 wires). The wiper piece is first in the menu.
   - Vehicle view: `modulare_ltgs` (183 segments).
 - Flattening keeps every KBL `Virtual_length`. The VW KBL wire lengths equal the board paths to the millimetre.
 - Ring terminals are placed on nodes via `Special_terminal_occurrence` with the same Id as the connector.
+- Cavities: KBL gives each wire end's cavity number, not the face arrangement; the app's layout is schematic and says so.
+  Each wire is oriented so the end with more cavities is the target (the one the user inserts). This flipped some
+  ignition-harness wires compared with the first published version and the demo videos.
 - The fictitious door harness has made-up wire lengths. Its slack is capped at 1.6 × path length.
 
 ## Mixed reality (Enter MR)
@@ -80,8 +88,10 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
 
 ## Testing without a headset
 
-- A hidden preview pane gets **no animation frames**. Drive the app with `window.formboard.step()` after
-  dispatching synthetic pointer events. OrbitControls throws harmless `setPointerCapture` errors for them.
+- A hidden preview pane gets **no animation frames** and a 0 × 0 window: set a viewport (`resize_window` 1280 × 800) first.
+  Then drive the mouse directly: set `pointers.mouse.ndc` from a projected world point, `mouse.active = true`,
+  `mouse.press()` / `mouse.pressed = false`, and call `window.formboard.step()` between moves. Aim the camera with
+  `controls.target` + `camera.position` + `controls.update()`.
 - Hand-tracking logic can be checked by instantiating `Pointers` with a fake renderer and fake hand joints.
 - Only the user can test feel and frame rate on the Quest. Say so; don't claim it.
 

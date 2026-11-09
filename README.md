@@ -26,17 +26,22 @@
 
 ## How it works
 
-1. **Choose a harness.** The **VW ignition harness** is real KBL data from the public VW "Old Beetle" sample: 18 wires and 20 connectors, flattened from the 3D vehicle geometry. The **door harness** is a fictitious example with variants from the KBL modules.
+1. **Choose a harness.** All VW data is real KBL from the public VW "Old Beetle" sample, flattened from the 3D vehicle geometry.
+   - **VW wiper harness** (short, about 5 minutes): 6 wires between a 5-pole and an 8-pole connector, a splice and a ground point, cut out of the full vehicle harness. It is named after its terminal names (53, 53b, 53c: the wiper motor by DIN 72552); the KBL does not name the part.
+   - **VW ignition harness**: 18 wires and 20 connectors.
+   - **Door harness**: a fictitious example with variants from the KBL modules.
 2. **Set the guide pegs.** Ghost pegs show where fork pegs and Y-pegs go; you pinch each one into place.
 3. **Route the wires, one at a time.** Pinch the glowing wire end and pull it along the pegs. It snaps to the next correct peg with a click and a haptic tick. A wrong branch or a skipped peg flashes red and counts as an error.
 4. **Guided or test mode.** *Guided* shows the route and the next peg. *Test* shows only the target connector, so you route from the board drawing; *Show me* hints are counted.
-5. **Quality check and summary.** Time, errors and hints per wire, with a JSON log to download.
-6. **The car.** The complete VW vehicle harness stands next to the workstation at 1:1, with the harness you just built glowing orange where it sits.
+5. **Insert the wire end into its cavity.** When the wire reaches a connector with several cavities, a magnified view of its face appears above it, with the cavity numbers from the KBL. Push the terminal through the right hole. *Guided* makes that hole pulse and slides a ghost terminal into it; in *Test* you take the cavity from the wire list. A wrong cavity flashes red and counts as a cavity error. The seated ends then show in the housings on the board.
+6. **Quality check and summary.** Time, routing and cavity errors and hints per wire, with a JSON log to download.
+7. **The car.** The complete VW vehicle harness stands next to the workstation at 1:1, with the harness you just built glowing orange where it sits.
 
 ### Realistic where it matters
 
 - **Hands, not rays.** Wires and pegs are handled at the pinch point between thumb and index fingertip. A wire is picked up only where the pinch closes, within 3 cm of its glowing end. Rays appear only for the panel and for teleporting.
 - **Wires with their real length.** The held wire reaches from the last peg to your fingers under light tension, and it can't be pulled further than its KBL length. For the VW harness, the KBL wire lengths match the flattened board paths to the millimetre.
+- **Cavities from the KBL.** Every wire end has its cavity in the KBL (`Contact_point` to `Contacted_cavity`). The KBL does not say how the cavities are arranged on the face (that is in the supplier's drawing), so the face layout is schematic: up to 4 cavities in one row, more in two rows, numbered left to right. The start end of each wire is shown seated; you insert the end into the connector with more cavities.
 - **Parts from the KBL.** Connector housings are sized by cavity count and coloured from the part description. Spark-plug connectors are rubber boots, ring terminals are copper lugs, and splices are heat-shrink sleeves. Wires show their base and tracer colours.
 - **A real formboard.** The board is plywood with the 1:1 drawing glued on, sized to the harness, at working height within arm's reach. Pegs, wires, connectors and your hands cast shadows, which helps you judge depth.
 
@@ -65,6 +70,7 @@ Without a Space Setup, the board goes to standard table height (74 cm) along you
 | | Headset (hands) | Headset (controllers) | Desktop |
 |---|---|---|---|
 | Wires, pegs | Pinch at the wire end or peg | Trigger at the controller tip | Left-drag on the board |
+| Cavities | Push the held wire end through the hole in the magnified view | Same, with the trigger held | Click the hole |
 | Panel buttons | Point and pinch | Point and trigger | Left-click |
 | Moving | Walk; *Go to car* / *Back to the formboard* | Grip button: aim at the floor, release to teleport. Left stick walks, right stick turns 30° | Right-drag look, Shift + right-drag or arrow keys pan, scroll zoom |
 | Mixed reality | *Enter MR*: look at the table, pinch (board); look at the floor, pinch (car). Pinch a cyan handle to carry, an orange ring to turn board or car | Same, with the trigger | (not available) |
@@ -80,6 +86,8 @@ KBL (VDA 4964) describes the wiring: connectors, wires, connections, modules and
   - **Flattening:** a formboard keeps every segment at its true length (wires are cut to length), while branches may turn freely. The layout starts from a plane projection (PCA, seen from above, never mirrored). It is then relaxed: segments are held at the KBL `Virtual_length` while nodes that come too close push apart. For the VW harness, all 30 segments end at their true length.
   - **Pegs:** fork pegs along long segments (one every 160 mm) and Y-pegs at branch points.
   - **Vehicle view:** the B-spline centre lines of the full vehicle harness, in vehicle coordinates.
+  - **Pieces:** `formboard(keep={...})` cuts a short harness out of a larger KBL: the wires between the kept connectors and the segments they run along (the wiper harness from the full vehicle file).
+  - **Cavities:** each wire end gets its cavity number, each connector its cavity list. `npm run data` fails if a wire end into a multi-pole connector has no valid cavity.
 - **`kbl_to_harness.py`** builds all app data (`src/data/*.json`). For the fictitious door harness it uses a hand-made layout (`data/board_layout.json`).
 
 ## Run and develop
@@ -92,8 +100,9 @@ npm run data               # rebuild src/data/*.json from the KBL files
 
 ```
 src/core/    pure logic, unit tested: grid, harness (variants, bundles), router (snap / wrong / done),
-             session (state machine, metrics), heldwire (shape of the held wire), rig (teleport maths)
-src/scene/   three.js: workshop, board, wires, panel, vehicle, audio
+             cavity (face layout), insert (push into a cavity), session (state machine, metrics),
+             heldwire (shape of the held wire), rig (teleport maths)
+src/scene/   three.js: workshop, board, wires, face view, panel, vehicle, audio
 src/input/   one pointer model for hands, controllers and mouse; teleport and stick movement
 src/i18n.js  English and German texts
 tools/       KBL -> app data
