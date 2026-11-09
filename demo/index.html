@@ -21,7 +21,13 @@
     .btn { display: inline-block; padding: 10px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; }
     .btn.primary { background: var(--ok); color: #0d1117; }
     .btn.ghost { border: 1px solid var(--line); color: var(--text); }
-    .section { margin: 34px 0 12px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .switch { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 4px 0 0; }
+    .switch button { border: 0; background: transparent; color: var(--muted); font: 600 15px system-ui, sans-serif; padding: 10px 18px; cursor: pointer; }
+    .switch button b { color: var(--text); margin-right: 4px; }
+    .switch button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: inset 0 -3px 0 var(--accent); }
+    .switch button[data-view="mr"][aria-pressed="true"] { box-shadow: inset 0 -3px 0 #f7a35c; }
+    .view[hidden] { display: none; }
+    .section { margin: 18px 0 12px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
     .section h2 { margin: 0; font-size: 24px; }
     .section .tag { color: #0d1117; background: var(--accent); border-radius: 999px; padding: 2px 10px; font: 700 12px system-ui, sans-serif; letter-spacing: 0.06em; }
     .section .tag.mr { background: #f7a35c; }
@@ -61,43 +67,10 @@
     <a class="btn ghost" href="https://github.com/suavi-yildirim/formboard-xr" data-i18n="source">Source on GitHub</a>
   </div>
 
-  <div class="section">
-    <span class="tag mr">MR</span><h2 data-i18n="mrHead">Mixed reality: on a real table</h2>
-    <p data-i18n="mrLead">Press <i>Enter MR</i>: the headset cameras show your room, and the formboard stands on your real table. The car harness lies at 1:1 on the floor. Captions in English and German.</p>
+  <div class="switch" role="group" aria-label="Demo videos">
+    <button data-view="vr" aria-pressed="true"><b>VR</b> <span data-i18n="swVr">Virtual workshop</span></button><button data-view="mr" aria-pressed="false"><b>MR</b> <span data-i18n="swMr">Your real room</span></button>
   </div>
-  <div class="grid">
-    <article class="card">
-      <div class="video">
-        <video src="media/mr-pegs.mp4" poster="media/mr-pegs.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
-      </div>
-      <div class="body">
-        <h2 data-i18n="mrPegsTitle">Pegs and the first wires</h2>
-        <p data-i18n="mrPegsText">Pinch the guide pegs into the board, then route the first wires. Each correct peg snaps green, with a click and a haptic tick.</p>
-      </div>
-    </article>
-    <article class="card">
-      <div class="video">
-        <video src="media/mr-wiring.mp4" poster="media/mr-wiring.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
-      </div>
-      <div class="body">
-        <h2 data-i18n="mrWiringTitle">Dense branches, wire by wire</h2>
-        <p data-i18n="mrWiringText">Through the busy branch area to the last wire. The next peg glows, and the bundles build up as on a real formboard.</p>
-      </div>
-    </article>
-    <article class="card">
-      <div class="video">
-        <video src="media/mr-finished.mp4" poster="media/mr-finished.jpg" autoplay muted loop playsinline preload="auto"></video>
-        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
-      </div>
-      <div class="body">
-        <h2 data-i18n="mrDoneTitle">Finished board and the car at 1:1</h2>
-        <p data-i18n="mrDoneText">The complete harness, the quality check, and the VW vehicle harness on the floor of the room, with the built harness in orange.</p>
-      </div>
-    </article>
-  </div>
-
+  <section class="view" data-view="vr">
   <div class="section">
     <span class="tag">VR</span><h2 data-i18n="vrHead">Virtual reality: in a virtual workshop</h2>
     <p data-i18n="vrLead">Press <i>Enter VR</i>: a workshop with a bench and a work light; teleport or walk with the sticks.</p>
@@ -136,6 +109,45 @@
       </div>
     </article>
   </div>
+  </section>
+  <section class="view" data-view="mr" hidden>
+  <div class="section">
+    <span class="tag mr">MR</span><h2 data-i18n="mrHead">Mixed reality: on a real table</h2>
+    <p data-i18n="mrLead">Press <i>Enter MR</i>: the headset cameras show your room, and the formboard stands on your real table. The car harness lies at 1:1 on the floor. Captions in English and German.</p>
+  </div>
+  <div class="grid">
+    <article class="card">
+      <div class="video">
+        <video src="media/mr-pegs.mp4" poster="media/mr-pegs.jpg" muted loop playsinline preload="none"></video>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
+      </div>
+      <div class="body">
+        <h2 data-i18n="mrPegsTitle">Pegs and the first wires</h2>
+        <p data-i18n="mrPegsText">Pinch the guide pegs into the board, then route the first wires. Each correct peg snaps green, with a click and a haptic tick.</p>
+      </div>
+    </article>
+    <article class="card">
+      <div class="video">
+        <video src="media/mr-wiring.mp4" poster="media/mr-wiring.jpg" muted loop playsinline preload="none"></video>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
+      </div>
+      <div class="body">
+        <h2 data-i18n="mrWiringTitle">Dense branches, wire by wire</h2>
+        <p data-i18n="mrWiringText">Through the busy branch area to the last wire. The next peg glows, and the bundles build up as on a real formboard.</p>
+      </div>
+    </article>
+    <article class="card">
+      <div class="video">
+        <video src="media/mr-finished.mp4" poster="media/mr-finished.jpg" muted loop playsinline preload="none"></video>
+        <div class="controls"><button class="sound" aria-pressed="false">Sound off</button><button class="full">⛶ Fullscreen</button></div>
+      </div>
+      <div class="body">
+        <h2 data-i18n="mrDoneTitle">Finished board and the car at 1:1</h2>
+        <p data-i18n="mrDoneText">The complete harness, the quality check, and the VW vehicle harness on the floor of the room, with the built harness in orange.</p>
+      </div>
+    </article>
+  </div>
+  </section>
 
   <div class="facts">
     <div class="fact" data-i18n="fact1"><b>From KBL to formboard</b>Wire paths from the KBL routing; flattening keeps segment lengths true (KBL wire lengths match the board paths to the millimetre).</div>
@@ -175,6 +187,7 @@
     mrWiringText: 'Durch den dichten Abzweigbereich bis zur letzten Leitung. Der nächste Stift leuchtet, und die Bündel entstehen wie am echten Formbrett.',
     mrDoneTitle: 'Fertiges Formbrett und das Fahrzeug 1:1',
     mrDoneText: 'Der komplette Leitungssatz, die Qualitätsprüfung und der VW-Fahrzeugleitungssatz auf dem Boden des Raums, der gebaute Leitungssatz in Orange.',
+    swVr: 'Virtuelle Werkstatt', swMr: 'Im echten Raum',
     vrHead: 'Virtual Reality: in einer virtuellen Werkstatt',
     vrLead: '<i>Enter VR</i> drücken: eine Werkstatt mit Werkbank und Arbeitsleuchte; teleportieren oder mit den Sticks gehen.',
     soundOff: 'Ton aus', soundOn: 'Ton an', fullscreen: '⛶ Vollbild', langGroup: 'Sprache',
@@ -198,16 +211,35 @@
     document.querySelector('.lang').setAttribute('aria-label', t('langGroup'));
     if (remember) {
       try { localStorage.setItem('formboard-demo-lang', lang); } catch {}
-      history.replaceState(null, '', '#' + lang);
+      writeHash();
     }
   }
   for (const b of document.querySelectorAll('.lang button')) b.addEventListener('click', () => setLang(b.dataset.lang));
-  let initial = (location.hash.slice(1) || '').toLowerCase();
+
+  // VR or MR videos, one set at a time. The link may say which: #mr, #vr, #de-mr, #en-vr (default VR).
+  let view = 'vr';
+  const tokens = (location.hash.slice(1) || '').toLowerCase().split(/[-+,]/);
+  function writeHash() { history.replaceState(null, '', '#' + lang + (view === 'mr' ? '-mr' : '')); }
+  function setView(v, remember = true) {
+    view = v === 'mr' ? 'mr' : 'vr';
+    for (const b of document.querySelectorAll('.switch button')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
+    for (const sec of document.querySelectorAll('.view')) {
+      const on = sec.dataset.view === view;
+      sec.hidden = !on;
+      for (const v of sec.querySelectorAll('video')) { if (on) v.play().catch(() => {}); else { v.pause(); v.muted = true; } }
+    }
+    for (const b of document.querySelectorAll('.sound')) { b.setAttribute('aria-pressed', 'false'); b.textContent = t('soundOff'); }
+    for (const v of document.querySelectorAll('video')) v.muted = true;
+    if (remember) writeHash();
+  }
+  for (const b of document.querySelectorAll('.switch button')) b.addEventListener('click', () => setView(b.dataset.view));
+  let initial = tokens.find((x) => x === 'de' || x === 'en') || '';
   if (initial !== 'de' && initial !== 'en') {
     try { initial = localStorage.getItem('formboard-demo-lang') || ''; } catch { initial = ''; }
   }
   if (initial !== 'de' && initial !== 'en') initial = (navigator.language || '').toLowerCase().startsWith('de') ? 'de' : 'en';
   setLang(initial, false);
+  setView(tokens.includes('mr') ? 'mr' : 'vr', false);
 
   // Fullscreen per video (iPhone Safari only supports fullscreen on the video element itself).
   for (const card of document.querySelectorAll('.video')) {
