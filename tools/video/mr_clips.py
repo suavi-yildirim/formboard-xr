@@ -61,8 +61,10 @@ LOGO_S = 4.5
 def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hold=0):
     """chapters: {caption key: (step number, 'Name')} for step chips and a progress bar (creative cut).
     stamps: [(raw time, text, 'ok' | 'err')] pop up at that moment of the recording."""
-    segs = [tuple(x) + (1,) * (5 - len(x)) for x in segs]  # optional 5th field: speed (0.5 = half speed)
-    ranges = ','.join(f'{s}-{e}' + (f'@{c}' if c else '') + (f'*{v}' if v != 1 else '') for s, e, c, _, v in segs)
+    # optional 5th field: speed (0.5 = half speed); optional 6th: True joins the part to the next one without a fade
+    segs = [tuple(x) + (1, False)[len(x) - 4:] if len(x) < 6 else tuple(x) for x in segs]
+    ranges = ','.join(f'{s}-{e}' + (f'@{c}' if c else '') + (f'*{v}' if v != 1 else '') + ('!' if j else '')
+                      for s, e, c, _, v, j in segs)
     os.makedirs(WORK, exist_ok=True)
     raw = f'{WORK}/{name}_raw.mp4'
     subprocess.run([VT, 'montage', IN, raw, ranges, str(FADE), '1280', '720', '9000'], check=True)
@@ -73,8 +75,9 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hol
     raw = stab
     caps, t = [], 0.0
     extra, chap_at = [], []
-    for i, (s, e, c, key, v) in enumerate(segs):
+    for i, (s, e, c, key, v, j) in enumerate(segs):
         d = (e - s) / v
+        fade = 0 if j else FADE
         for rt, text, col in stamps:
             if v == 1 and s + 0.2 <= rt <= e - 0.2:  # the chime comes just before the cut: the pop-up may run over the fade
                 if extra and extra[-1]['e'] > t + rt - s: extra[-1]['e'] = t + rt - s - 0.05
@@ -82,14 +85,14 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hol
         if chapters and key in chapters:
             n, label = chapters[key]
             if not chap_at or chap_at[-1][0] != n: chap_at.append([n, label, t + (0.15 if i else 0.3), 0])
-            chap_at[-1][3] = t + d - FADE - 0.05
-        start, end = t + (0.15 if i else 0.3), t + d - FADE - 0.05
+            chap_at[-1][3] = t + d - fade - 0.05
+        start, end = t + (0.15 if i else 0.3), t + d - fade - 0.05
         # German on top (large), English below
         if key and (not caps or caps[-1]['t'] != CAP[key][1]):
             caps.append({'s': start, 'e': end, 't': CAP[key][1], 'd': CAP[key][0]})
         elif key:
             caps[-1]['e'] = end  # same caption over consecutive segments
-        t += d - FADE
+        t += d - fade
     total = t + FADE
     for c in cards:
         # a 5th field False: a normal caption box instead of a darkened title card
@@ -133,14 +136,15 @@ if 'finish' in which: build('mr-finished', FINISH, 3000)
 # Full edits: teaser, harness choice, pegs, wiring, finish; the car view starts with the turn from the board.
 # The ending: the sign above the car (2:51.5-2:54.4) at half speed, about 2 s clear, then under the end card.
 # Suavi: no zoom in the full edits, so the wiring shots are uncropped here and the stabiliser zooms only 5 %.
-# The sign scene plays at 90 % speed; the end card comes over it and the last frame (2:54.35) is then held
+# The sign scene plays at 80 % speed and eases out (60 %, 45 %); the end card comes over it and the last frame (2:54.35) is then held
 # still for 3 s (vtool caption hold), card fully visible to the end (Suavi: no choppy slow motion, no fade-out).
 HOLD = 3.0
 FULL = [(a, b, None) + tuple(x) for a, b, _, *x in TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1]] + \
-       [(165.7, 170.5, None, 'incar'), (170.5, 174.35, None, None, 0.9)]  # 2:44-2:45.6 is a whip pan (1100 px/s): dissolve instead
+       [(165.7, 170.5, None, 'incar'), (170.5, 173.5, None, None, 0.8, True),
+        (173.5, 173.9, None, None, 0.6, True), (173.9, 174.35, None, None, 0.45)]  # ease out into the held frame  # 2:44-2:45.6 is a whip pan (1100 px/s): dissolve instead
 CARDS = [
     (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
-    (-1.6, None, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
+    (-2.0, None, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
 ]
 if 'full' in which:
     build('formboard-xr-mr-full', FULL, 4000, cards=CARDS, zoom='1.05', hold=HOLD)

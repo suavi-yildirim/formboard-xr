@@ -8,7 +8,8 @@
 //   vtool montage <in> <out.mp4> <ranges> <fade> <w> <h> <kbps>   like encode, with cross-fades (video + audio);
 //                                                                  a range "s-e@x:y:w" also crops it to the 16:9 box
 //                                                                  at source pixel x, y (top left) with width w;
-//                                                                  a trailing "*0.5" plays the range at half speed
+//                                                                  a trailing "*0.5" plays the range at half speed;
+//                                                                  a trailing "!" joins it to the next range without a fade
 //   vtool caption <in> <out.mp4> <captions.json> <kbps> [hold s]  burn in captions (see the caption case); hold
 //                                                                  repeats the last frame (with its captions) at the end
 //   vtool stabilize <in> <out.mp4> <kbps> [window s] [zoom]       smooth the camera path (see the stabilize case)
@@ -207,7 +208,10 @@ case "montage":
   let natural = load { try await srcV.load(.naturalSize) }
   var crops: [CGAffineTransform] = []
   var speeds: [Double] = []
-  let ranges = args[4].split(separator: ",").map { whole -> CMTimeRange in
+  var joins: [Bool] = []
+  let ranges = args[4].split(separator: ",").map { item0 -> CMTimeRange in
+    joins.append(item0.hasSuffix("!"))
+    let whole = item0.hasSuffix("!") ? item0.dropLast() : item0
     let sp = whole.split(separator: "*")
     speeds.append(sp.count > 1 ? Double(sp[1])! : 1)
     let item = sp[0]
@@ -223,7 +227,9 @@ case "montage":
     crops.append(t)
     return CMTimeRange(start: CMTime(seconds: se[0], preferredTimescale: 600), end: CMTime(seconds: se[1], preferredTimescale: 600))
   }
-  let fade = CMTime(seconds: Double(args[5])!, preferredTimescale: 600)
+  let fade0 = CMTime(seconds: Double(args[5])!, preferredTimescale: 600)
+  // fade after range i (into range i + 1): none after the last range or a joined one
+  let fades = (0..<ranges.count).map { i in i < ranges.count - 1 && !joins[i] ? fade0 : CMTime.zero }
   let w = Int(args[6])!, h = Int(args[7])!, kbps = Int(args[8])!
   let comp = AVMutableComposition()
   let lanes = min(2, ranges.count)
@@ -241,7 +247,7 @@ case "montage":
       if srcA != nil { aT[lane].scaleTimeRange(CMTimeRange(start: cursor, duration: r.duration), toDuration: dur) }
     }
     segs.append((cursor, cursor + dur, lane))
-    cursor = cursor + dur - (i < ranges.count - 1 ? fade : .zero)
+    cursor = cursor + dur - fades[i]
   }
   let total = segs.last!.end
   let vc = AVMutableVideoComposition()
@@ -251,15 +257,15 @@ case "montage":
   let mix = AVMutableAudioMix()
   var params = aT.map { AVMutableAudioMixInputParameters(track: $0) }
   for (i, s) in segs.enumerated() {
-    let inStart = i > 0 ? s.start + fade : s.start
-    let outStart = i < segs.count - 1 ? s.end - fade : s.end
+    let inStart = i > 0 ? s.start + fades[i - 1] : s.start
+    let outStart = s.end - fades[i]
     let solo = AVMutableVideoCompositionInstruction()
     solo.timeRange = CMTimeRange(start: inStart, end: outStart)
     let soloLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: vT[s.lane])
     soloLayer.setTransform(crops[i], at: inStart)
     solo.layerInstructions = [soloLayer]
     instructions.append(solo)
-    if i < segs.count - 1 {
+    if fades[i] > .zero {
       let next = segs[i + 1]
       let tr = CMTimeRange(start: outStart, end: s.end)
       let x = AVMutableVideoCompositionInstruction()

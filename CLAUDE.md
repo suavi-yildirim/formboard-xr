@@ -133,7 +133,8 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
   can't be converted on this Mac). The full MR edit (`quest3-videos/formboard-xr-mr-full.mp4`, 1:15, ends on the car sign under a darkened end card) and a creative cut (`formboard-xr-mr-creative.mp4`: step chips, progress bar, pop-ups; `mr_clips.py creative`) stay local.
   All clips are stabilised (`vtool stabilize`, 0.7 s window, 10 % zoom; it prints the shake and the fastest moments).
   On the darkened title and end cards the FAU logo is the white transparent PNG; the end card stays over the car sign,
-  which plays at half speed (`*0.5` on a range).
+  which plays at 80 % speed and eases out (`*0.8` on a range, `!` joins ranges without a fade); the last frame is
+  held 3 s (`vtool caption ... <hold>`).
   Video buttons sit under each video, next to its title: captions and logos fill the video corners.
 - VR section order: wiring by hand, finished formboard, real KBL data from an example car. Each video has a sound
   button (one with sound at a time) and a fullscreen button.
