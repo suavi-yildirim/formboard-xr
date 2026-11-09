@@ -51,7 +51,12 @@ A short setup comes first:
 
 Then you work as in VR: wires, pegs and the panel behave the same, and shadows of the board, wires and your hands fall on the real table.
 
-**Move them any time.** Walk up, pinch the cyan bar below the board, and carry the board where you want it; it keeps facing you. The car has a cyan knob on a post at its engine end: pinch it and carry the car across the floor. The handles light up when your fingers come close. *Set up again* in the menu repeats the setup.
+**Move and turn them any time.** Cyan handles carry, orange rings turn:
+
+- **Board:** pinch the cyan bar below it and carry the board where you want it. To turn it, pinch the orange ring at its bottom-right corner and move your hand around the board, like turning a turntable.
+- **Car:** pinch the cyan knob on the post at its engine end and carry the car across the floor. To turn it, pinch the orange ring on the post at its far end and walk it around.
+
+The handles light up when your fingers come close. *Set up again* in the menu repeats the setup.
 
 Without a Space Setup, the board goes to standard table height (74 cm) along your gaze, and the car to where your gaze meets the floor. There is no teleport or stick movement in MR: you walk in the real room.
 
@@ -62,7 +67,7 @@ Without a Space Setup, the board goes to standard table height (74 cm) along you
 | Wires, pegs | Pinch at the wire end or peg | Trigger at the controller tip | Left-drag on the board |
 | Panel buttons | Point and pinch | Point and trigger | Left-click |
 | Moving | Walk; *Go to car* / *Back to the formboard* | Grip button: aim at the floor, release to teleport. Left stick walks, right stick turns 30° | Right-drag look, Shift + right-drag or arrow keys pan, scroll zoom |
-| Mixed reality | *Enter MR*: look at the table, pinch (board); look at the floor, pinch (car). Pinch a cyan handle to carry board or car | Same, with the trigger | (not available) |
+| Mixed reality | *Enter MR*: look at the table, pinch (board); look at the floor, pinch (car). Pinch a cyan handle to carry, an orange ring to turn board or car | Same, with the trigger | (not available) |
 | Language | EN \| DE on the menu panel | EN \| DE on the menu panel | EN \| DE in the help box |
 
 Open the link in the Quest Browser and press *Enter VR* or *Enter MR*. Desktop browsers have no WebXR, so there the app runs in desktop mode.

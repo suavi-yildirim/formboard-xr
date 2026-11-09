@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stationPose, fallbackPoint, carPose, floorPoint, TABLE_HEIGHT_M } from '../src/core/placement.js';
+import { stationPose, fallbackPoint, carPose, floorPoint, turnYaw, TABLE_HEIGHT_M } from '../src/core/placement.js';
 
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
 
@@ -40,4 +40,17 @@ test('placement: without a floor scan the gaze meets the floor, 1 to 6 m away', 
   near(Math.hypot(p.x, p.z), 1.6 / 0.5 * 0.866);
   assert.ok(Math.hypot(...Object.values(floorPoint(head, { x: 0, y: -0.9, z: -0.1 })).filter((_, i) => i !== 1)) >= 1 - 1e-9); // too close: pushed to 1 m
   assert.equal(floorPoint(head, { x: 0, y: 0.1, z: -1 }), null);
+});
+
+test('placement: turntable, the object turns with the hand around its centre', () => {
+  const c = { x: 1, z: -1 };
+  // hand starts in front of the centre (+z) and moves a quarter round to the right (+x)
+  near(turnYaw(0.2, c, { x: 1, z: 0 }, { x: 2, z: -1 }), 0.2 + Math.PI / 2);
+  // hand stays on the same bearing (only closer): no turn
+  near(turnYaw(0.2, c, { x: 1, z: 0 }, { x: 1, z: -0.5 }), 0.2);
+  // a grab point rotated with the object lands where the hand is (direction)
+  const yaw = turnYaw(0, c, { x: 1.5, z: -1 }, { x: 1, z: -0.4 });
+  const local = { x: 0.5, z: 0 }; // grab point relative to the centre at yaw 0
+  const turned = { x: local.x * Math.cos(yaw) + local.z * Math.sin(yaw), z: -local.x * Math.sin(yaw) + local.z * Math.cos(yaw) };
+  near(Math.atan2(turned.x, turned.z), Math.atan2(0, 0.6));
 });

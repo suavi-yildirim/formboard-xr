@@ -61,11 +61,12 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
   - Setup (`ui.setup`): `'board'` (any horizontal surface; fallback: gaze meets 0.74 m, 0.3–1.2 m ahead),
     then `'car'` (floor only, below 0.4 m; fallback: gaze meets the floor, 1–6 m ahead), then the menu.
 - In MR the car has its own pose (`mrCar`), independent of the board. In VR it follows the station (`CAR_OFFSET`).
-- Free moving in MR (the user asked for it):
-  - A cyan bar under the board's front edge and a cyan knob on a post at the car's engine end.
-  - A fresh pinch within 7 cm grabs; the object follows the fingertip with the grab offset kept.
-  - The board turns to face the user while carried; the car stays on the floor and keeps its direction.
-  - While carrying, that hand does nothing else.
+- Free moving and turning in MR (the user asked for both):
+  - Cyan = carry: a bar under the board's front edge, and a knob on a post at the car's engine end.
+  - Orange ring = turn (turntable, `turnYaw` in `core/placement.js`): at the board's bottom-right corner, and on a post at the car's far end.
+  - A fresh pinch within 7 cm grabs the nearest handle.
+  - Carrying keeps the grab offset and the object's turn; the car stays on the floor.
+  - While in use, that hand does nothing else.
 - The user tried a virtual workbench in MR and dropped it: the board goes on the real table.
 - MR hides the workshop decor (`decor` group), background, fog, car panel and board struts. It shows a shadow catcher on the table.
 - MR turns off locomotion: no teleport, sticks or jumps, because moving the world would pull the board off the table.

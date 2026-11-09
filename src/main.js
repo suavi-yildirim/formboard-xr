@@ -21,7 +21,7 @@ import { Locomotion } from './input/locomotion.js';
 import { heldWire } from './core/heldwire.js';
 import { WIRE_Z } from './scene/wires.js';
 import { Placement } from './input/placement.js';
-import { facingYaw } from './core/placement.js';
+import { turnYaw } from './core/placement.js';
 
 const dataUrl = (f) => new URL(`./data/${f}`, import.meta.url);
 const getJson = async (f) => (await fetch(dataUrl(f))).json();
@@ -156,8 +156,9 @@ getJson('vw_vehicle.json').then((data) => {
   vehicle = new VehicleView(data);
   scene.add(vehicle.group);
   carHandle = makeCarHandle();
-  vehicle.group.add(carHandle);
-  carHandle.visible = xrMode === 'mr';
+  carTurn = makeCarTurn();
+  vehicle.group.add(carHandle, carTurn);
+  carHandle.visible = carTurn.visible = xrMode === 'mr';
   placeVehicle();
   updateVehicleSign();
   refresh();
@@ -195,69 +196,93 @@ function updateVehicleSign() {
   ], xrMode === 'mr' ? headPosition() : station.localToWorld(new THREE.Vector3(0, 0.66, 0.45))); // the sign faces the user
 }
 
-// --- MR grab handles: walk up, pinch the cyan handle, carry the board or the car ---
+// --- MR handles: walk up and pinch. Cyan moves (carry the board or the car), orange turns (move the
+// hand around the object like a turntable). ---
 const HANDLE_GRAB_M = 0.07;
-const handleMat = () => new THREE.MeshStandardMaterial({ color: 0x5ce1ff, emissive: 0x5ce1ff, emissiveIntensity: 0.35, roughness: 0.4 });
-let boardHandle = null, carHandle = null;
-let moving = null; // { what: 'board' | 'car', p: pointer, offset: Vector3 }
+const MOVE_COLOUR = 0x5ce1ff, TURN_COLOUR = 0xf7a35c;
+const handleMat = (c) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.35, roughness: 0.4 });
+const turnRing = () => new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.009, 10, 32).rotateX(Math.PI / 2), handleMat(TURN_COLOUR));
+let boardHandle = null, carHandle = null, boardTurn = null, carTurn = null;
+// { what: 'board' | 'car' (move) | 'boardTurn' | 'carTurn', p: pointer, offset } or for turning
+// { ..., centre, startYaw, startTip }
+let moving = null;
 
-// A bar just below the board's front edge (mesh x axis = bar axis).
-function makeBoardHandle() {
-  const bar = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.26, 4, 12).rotateZ(Math.PI / 2), handleMat());
-  bar.position.set(0, -H.board.surfaceSize.h / 2 - 0.035, 0.03);
+// Board: a cyan bar just below the front edge (mesh x axis = bar axis), an orange ring at the
+// bottom-right corner.
+function makeBoardHandles() {
+  const { w, h } = H.board.surfaceSize;
+  const bar = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.26, 4, 12).rotateZ(Math.PI / 2), handleMat(MOVE_COLOUR));
+  bar.position.set(0, -h / 2 - 0.035, 0.03);
   bar.userData.halfLength = 0.13;
   bar.castShadow = true;
-  return bar;
+  const ring = turnRing();
+  ring.position.set(w / 2 - 0.02, -h / 2 - 0.04, 0.03);
+  return [bar, ring];
 }
 
-// A post with a knob at hand height at the car's engine end (vehicle +x, towards the user).
-function makeCarHandle() {
+// Car: a post with a knob or ring at hand height; x along the car (engine end at +x).
+function makeCarPost(x, top) {
   const g = new THREE.Group();
   const lift = vehicle.liftM;
   const post = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.0, 10), new THREE.MeshStandardMaterial({ color: 0x8a9099, metalness: 0.6, roughness: 0.4 }));
   post.position.y = 0.5 - lift;
-  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 20, 12), handleMat());
-  knob.position.y = 1.0 - lift;
-  g.add(post, knob);
-  g.position.set(1.9, 0, 0);
-  g.userData.knob = knob;
+  top.position.y = 1.0 - lift;
+  g.add(post, top);
+  g.position.set(x, 0, 0);
+  g.userData.grip = top;
   return g;
 }
+const makeCarHandle = () => makeCarPost(1.9, new THREE.Mesh(new THREE.SphereGeometry(0.035, 20, 12), handleMat(MOVE_COLOUR)));
+const makeCarTurn = () => makeCarPost(-1.9, turnRing()); // the far end: swing the car around
 
 function headPosition() {
   const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
   return new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
 }
 
-// Distance from a fingertip to a handle (along the board bar, or to the car knob).
+const HANDLES = ['board', 'boardTurn', 'car', 'carTurn'];
+const handleMesh = (what) => ({ board: boardHandle, boardTurn: boardTurn, car: carHandle?.userData.grip, carTurn: carTurn?.userData.grip })[what];
+
+// Distance from a fingertip to a handle (along the board bar; to the centre of knobs and rings).
 function handleDistance(what, tip) {
+  const mesh = handleMesh(what);
+  if (!mesh || xrMode !== 'mr') return Infinity;
+  if (what.startsWith('car') && !vehicle?.group.visible) return Infinity;
   if (what === 'board') {
-    if (!boardHandle?.visible) return Infinity;
-    const l = boardHandle.worldToLocal(tip.clone());
-    return Math.hypot(Math.max(Math.abs(l.x) - boardHandle.userData.halfLength, 0), l.y, l.z);
+    const l = mesh.worldToLocal(tip.clone());
+    return Math.hypot(Math.max(Math.abs(l.x) - mesh.userData.halfLength, 0), l.y, l.z);
   }
-  if (!carHandle?.visible || !vehicle?.group.visible) return Infinity;
-  return carHandle.userData.knob.getWorldPosition(new THREE.Vector3()).distanceTo(tip);
+  return mesh.getWorldPosition(new THREE.Vector3()).distanceTo(tip);
 }
 
 function handleNear(tip) {
-  const d = { board: handleDistance('board', tip), car: handleDistance('car', tip) };
-  const what = d.board <= d.car ? 'board' : 'car';
-  return d[what] <= HANDLE_GRAB_M ? what : null;
+  let best = null, bestD = HANDLE_GRAB_M;
+  for (const what of HANDLES) {
+    const d = handleDistance(what, tip);
+    if (d <= bestD) { best = what; bestD = d; }
+  }
+  return best;
 }
 
 function startMove(what, p) {
-  const target = what === 'board' ? station.position : vehicle.group.position;
-  moving = { what, p, offset: target.clone().sub(p.tip) };
+  const obj = what.startsWith('board') ? station : vehicle.group;
+  moving = what.endsWith('Turn')
+    ? { what, p, centre: obj.position.clone(), startYaw: obj.rotation.y, startTip: p.tip.clone() }
+    : { what, p, offset: obj.position.clone().sub(p.tip) };
   sfx.grab();
   p.pulse(0.4, 30);
 }
 
 function dragTo(tip) {
+  if (moving.what.endsWith('Turn')) {
+    const yaw = turnYaw(moving.startYaw, moving.centre, moving.startTip, tip);
+    if (moving.what === 'boardTurn') { station.rotation.set(0, yaw, 0); updateLight(); }
+    else { mrCar = { ...mrCar, yaw }; placeVehicle(); }
+    return;
+  }
   const pos = tip.clone().add(moving.offset);
   if (moving.what === 'board') {
-    station.position.copy(pos);
-    station.rotation.set(0, facingYaw(pos, headPosition()), 0); // keep facing the user while carried
+    station.position.copy(pos); // keeps its turn: the orange ring sets that
     updateLight();
   } else {
     mrCar = { x: pos.x, z: pos.z, yaw: mrCar?.yaw ?? 0 }; // the car stays on the floor
@@ -266,19 +291,24 @@ function dragTo(tip) {
 }
 
 function endMove() {
-  if (moving?.what === 'car') updateVehicleSign();
+  if (moving?.what.startsWith('car')) updateVehicleSign();
   moving = null;
   sfx.snap();
 }
 
-// Handles light up when a fingertip comes close, and stay lit while carried.
+// Handles light up when a fingertip comes close, and stay lit while in use.
 function updateHandleGlow() {
-  for (const [what, mesh] of [['board', boardHandle], ['car', carHandle?.userData.knob]]) {
+  for (const what of HANDLES) {
+    const mesh = handleMesh(what);
     if (!mesh) continue;
     let near = moving?.what === what;
     for (const p of pointers.list) if (!near && p.enabled && p.tip && handleDistance(what, p.tip) < HANDLE_GRAB_M * 1.5) near = true;
     mesh.material.emissiveIntensity = near ? 1.4 : 0.35;
   }
+}
+
+function setHandlesVisible(v) {
+  for (const m of [boardHandle, boardTurn, carHandle, carTurn]) if (m) m.visible = v;
 }
 
 // --- harness-dependent state ---
@@ -309,9 +339,9 @@ async function loadHarness(i) {
   H.board.group.position.set(0, 0.025 + (heightM / 2) * Math.cos(tilt), -0.03);
   H.board.group.rotation.x = -tilt;
   station.add(H.board.group);
-  boardHandle = makeBoardHandle();
-  H.board.group.add(boardHandle);
-  boardHandle.visible = xrMode === 'mr';
+  [boardHandle, boardTurn] = makeBoardHandles();
+  H.board.group.add(boardHandle, boardTurn);
+  boardHandle.visible = boardTurn.visible = xrMode === 'mr';
   for (const s of H.board.struts ?? []) s.visible = xrMode !== 'mr'; // ?? []: an older cached board.js has none
   updateLight();
   H.wires = new WireLayer(H.board);
@@ -870,8 +900,7 @@ function setMode(mode) {
   for (const s of H.board?.struts ?? []) s.visible = !mr;
   carPanel.mesh.visible = !mr;
   loco.enabled = !mr;
-  if (boardHandle) boardHandle.visible = mr;
-  if (carHandle) carHandle.visible = mr;
+  setHandlesVisible(mr);
   moving = null;
   if (!mr) {
     ui.setup = null;
@@ -924,4 +953,4 @@ window.addEventListener('resize', () => {
 
 // Debug handle. step() renders one frame by hand, for scripted tests when the page gets no animation frames.
 window.formboard = { H, panel, carPanel, camera, step: frame, load: loadHarness, setView, setMode, placement, station, ui, beginSetup, confirmSetup,
-  handles: { near: handleNear, start: startMove, drag: dragTo, end: endMove, get board() { return boardHandle; }, get car() { return carHandle; }, get mrCar() { return mrCar; } } };
+  handles: { near: handleNear, start: startMove, drag: dragTo, end: endMove, get board() { return boardHandle; }, get car() { return carHandle; }, get boardTurn() { return boardTurn; }, get carTurn() { return carTurn; }, get mrCar() { return mrCar; } } };

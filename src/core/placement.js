@@ -44,3 +44,10 @@ export function floorPoint(origin, dir) {
   t = Math.min(Math.max(t, 1 / flat), 6 / flat);
   return { x: origin.x + dir.x * t, y: 0, z: origin.z + dir.z * t };
 }
+
+// Turntable: an object grabbed at startTip turns about its centre so that the grab point follows
+// the hand around it. Same convention as facingYaw (a turn by a adds a to the heading).
+export function turnYaw(startYaw, centre, startTip, tip) {
+  const heading = (p) => Math.atan2(p.x - centre.x, p.z - centre.z);
+  return startYaw + heading(tip) - heading(startTip);
+}
