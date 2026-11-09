@@ -22,7 +22,8 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
   - In VR, board work happens at the **pinch point** (`p.tip`), not by ray.
   - Rays only serve the panel and teleport.
   - The mouse uses a ray onto the board.
-- The debug handle `window.formboard` exposes `H, panel, carPanel, camera, step, load, setView, setMode, placement, station, ui`.
+- The debug handle `window.formboard` exposes `H, panel, carPanel, camera, step, load, setView, setMode, placement, station, ui,
+  beginSetup, confirmSetup, handles` (`handles.near/start/drag/end` simulate carrying with a fake `{ tip, pulse }` pointer).
 - Board and panel live in the `station` group (origin on the table top, +z towards the user). VR keeps it on the
   bench at (0, 0.74, −0.45). MR moves it onto the real table. The work light (`updateLight`) and the 1:1 car
   (`placeVehicle`, 2.5 m to the station's right, on the floor) follow it.
@@ -56,11 +57,19 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
 ## Mixed reality (Enter MR)
 
 - `immersive-ar` session with `hit-test`; placement maths in `core/placement.js` (tested), XR part in `input/placement.js`.
-  - Gaze hit-test against the Quest's Space Setup. Only surfaces with an upward normal count as tables.
-  - Fallback: the gaze meets a plane at 0.74 m, kept 0.3–1.2 m in front.
+  - Gaze hit-test against the Quest's Space Setup. Only surfaces with an upward normal count.
+  - Setup (`ui.setup`): `'board'` (any horizontal surface; fallback: gaze meets 0.74 m, 0.3–1.2 m ahead),
+    then `'car'` (floor only, below 0.4 m; fallback: gaze meets the floor, 1–6 m ahead), then the menu.
+- In MR the car has its own pose (`mrCar`), independent of the board. In VR it follows the station (`CAR_OFFSET`).
+- Free moving in MR (the user asked for it):
+  - A cyan bar under the board's front edge and a cyan knob on a post at the car's engine end.
+  - A fresh pinch within 7 cm grabs; the object follows the fingertip with the grab offset kept.
+  - The board turns to face the user while carried; the car stays on the floor and keeps its direction.
+  - While carrying, that hand does nothing else.
+- The user tried a virtual workbench in MR and dropped it: the board goes on the real table.
 - MR hides the workshop decor (`decor` group), background, fog, car panel and board struts. It shows a shadow catcher on the table.
 - MR turns off locomotion: no teleport, sticks or jumps, because moving the world would pull the board off the table.
-- "Place board" replaces "Go to car" on the panel.
+- "Set up again" replaces "Go to car" on the panel.
 - The renderer needs `alpha: true`. With a null background, three.js clears to transparent in alpha-blend mode.
 - Not yet tested on the Quest (as of the first MR version). Hit-test results, passthrough look and table height need the user's check.
 - Raycasts ignore `visible`: skip hidden panels explicitly, or they swallow clicks.

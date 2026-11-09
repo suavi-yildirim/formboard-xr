@@ -21,6 +21,7 @@ import { Locomotion } from './input/locomotion.js';
 import { heldWire } from './core/heldwire.js';
 import { WIRE_Z } from './scene/wires.js';
 import { Placement } from './input/placement.js';
+import { facingYaw } from './core/placement.js';
 
 const dataUrl = (f) => new URL(`./data/${f}`, import.meta.url);
 const getJson = async (f) => (await fetch(dataUrl(f))).json();
@@ -154,6 +155,9 @@ let vehicle = null;
 getJson('vw_vehicle.json').then((data) => {
   vehicle = new VehicleView(data);
   scene.add(vehicle.group);
+  carHandle = makeCarHandle();
+  vehicle.group.add(carHandle);
+  carHandle.visible = xrMode === 'mr';
   placeVehicle();
   updateVehicleSign();
   refresh();
@@ -162,8 +166,18 @@ getJson('vw_vehicle.json').then((data) => {
 // The car stands 1:1 on the floor next to the workstation (2.5 m to its right, engine end towards
 // the user), in VR as in MR: wherever the board is placed, the car comes along.
 const CAR_OFFSET = new THREE.Vector3(2.5, 0, -0.45);
+let mrCar = null; // MR: the car's own pose on the floor ({x, z, yaw}), set in the setup and by dragging
 function placeVehicle() {
   if (!vehicle) return;
+  if (xrMode === 'mr') {
+    vehicle.group.visible = !!mrCar;
+    if (mrCar) {
+      vehicle.group.position.set(mrCar.x, vehicle.liftM, mrCar.z);
+      vehicle.group.rotation.set(0, mrCar.yaw, 0);
+    }
+    return;
+  }
+  vehicle.group.visible = true;
   station.updateMatrixWorld(true);
   const p = station.localToWorld(CAR_OFFSET.clone());
   vehicle.group.position.set(p.x, vehicle.liftM, p.z);
@@ -178,13 +192,100 @@ function updateVehicleSign() {
     t('sign2', { n: d.full.length, id: d.full_id, c: d.full_connectors }),
     t('sign3', { id: d.highlight_id }),
     t('sign4'),
-  ], station.localToWorld(new THREE.Vector3(0, 0.66, 0.45))); // the sign faces the user at the workstation
+  ], xrMode === 'mr' ? headPosition() : station.localToWorld(new THREE.Vector3(0, 0.66, 0.45))); // the sign faces the user
+}
+
+// --- MR grab handles: walk up, pinch the cyan handle, carry the board or the car ---
+const HANDLE_GRAB_M = 0.07;
+const handleMat = () => new THREE.MeshStandardMaterial({ color: 0x5ce1ff, emissive: 0x5ce1ff, emissiveIntensity: 0.35, roughness: 0.4 });
+let boardHandle = null, carHandle = null;
+let moving = null; // { what: 'board' | 'car', p: pointer, offset: Vector3 }
+
+// A bar just below the board's front edge (mesh x axis = bar axis).
+function makeBoardHandle() {
+  const bar = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.26, 4, 12).rotateZ(Math.PI / 2), handleMat());
+  bar.position.set(0, -H.board.surfaceSize.h / 2 - 0.035, 0.03);
+  bar.userData.halfLength = 0.13;
+  bar.castShadow = true;
+  return bar;
+}
+
+// A post with a knob at hand height at the car's engine end (vehicle +x, towards the user).
+function makeCarHandle() {
+  const g = new THREE.Group();
+  const lift = vehicle.liftM;
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.0, 10), new THREE.MeshStandardMaterial({ color: 0x8a9099, metalness: 0.6, roughness: 0.4 }));
+  post.position.y = 0.5 - lift;
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 20, 12), handleMat());
+  knob.position.y = 1.0 - lift;
+  g.add(post, knob);
+  g.position.set(1.9, 0, 0);
+  g.userData.knob = knob;
+  return g;
+}
+
+function headPosition() {
+  const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  return new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
+}
+
+// Distance from a fingertip to a handle (along the board bar, or to the car knob).
+function handleDistance(what, tip) {
+  if (what === 'board') {
+    if (!boardHandle?.visible) return Infinity;
+    const l = boardHandle.worldToLocal(tip.clone());
+    return Math.hypot(Math.max(Math.abs(l.x) - boardHandle.userData.halfLength, 0), l.y, l.z);
+  }
+  if (!carHandle?.visible || !vehicle?.group.visible) return Infinity;
+  return carHandle.userData.knob.getWorldPosition(new THREE.Vector3()).distanceTo(tip);
+}
+
+function handleNear(tip) {
+  const d = { board: handleDistance('board', tip), car: handleDistance('car', tip) };
+  const what = d.board <= d.car ? 'board' : 'car';
+  return d[what] <= HANDLE_GRAB_M ? what : null;
+}
+
+function startMove(what, p) {
+  const target = what === 'board' ? station.position : vehicle.group.position;
+  moving = { what, p, offset: target.clone().sub(p.tip) };
+  sfx.grab();
+  p.pulse(0.4, 30);
+}
+
+function dragTo(tip) {
+  const pos = tip.clone().add(moving.offset);
+  if (moving.what === 'board') {
+    station.position.copy(pos);
+    station.rotation.set(0, facingYaw(pos, headPosition()), 0); // keep facing the user while carried
+    updateLight();
+  } else {
+    mrCar = { x: pos.x, z: pos.z, yaw: mrCar?.yaw ?? 0 }; // the car stays on the floor
+    placeVehicle();
+  }
+}
+
+function endMove() {
+  if (moving?.what === 'car') updateVehicleSign();
+  moving = null;
+  sfx.snap();
+}
+
+// Handles light up when a fingertip comes close, and stay lit while carried.
+function updateHandleGlow() {
+  for (const [what, mesh] of [['board', boardHandle], ['car', carHandle?.userData.knob]]) {
+    if (!mesh) continue;
+    let near = moving?.what === what;
+    for (const p of pointers.list) if (!near && p.enabled && p.tip && handleDistance(what, p.tip) < HANDLE_GRAB_M * 1.5) near = true;
+    mesh.material.emissiveIntensity = near ? 1.4 : 0.35;
+  }
 }
 
 // --- harness-dependent state ---
 const H = { file: null, harness: null, pos: {}, nb: {}, vlist: [], problems: [], session: null, board: null, wires: null };
 let xrMode = 'desktop'; // 'desktop' | 'vr' | 'mr'
-const ui = { placing: false, harnessIdx: 0, variant: 0, mode: 'guided', status: '', statusKind: '', ghostUntil: 0, lastSecond: -1, loading: false };
+const ui = { setup: null, // MR setup step: 'board', then 'car', then null
+   harnessIdx: 0, variant: 0, mode: 'guided', status: '', statusKind: '', ghostUntil: 0, lastSecond: -1, loading: false };
 let attempt = null;
 let owner = null; // pointer currently holding the wire
 let polylines = {};
@@ -208,6 +309,9 @@ async function loadHarness(i) {
   H.board.group.position.set(0, 0.025 + (heightM / 2) * Math.cos(tilt), -0.03);
   H.board.group.rotation.x = -tilt;
   station.add(H.board.group);
+  boardHandle = makeBoardHandle();
+  H.board.group.add(boardHandle);
+  boardHandle.visible = xrMode === 'mr';
   for (const s of H.board.struts ?? []) s.visible = xrMode !== 'mr'; // ?? []: an older cached board.js has none
   updateLight();
   H.wires = new WireLayer(H.board);
@@ -420,7 +524,7 @@ function onButton(id) {
   else if (id === 'start') startRun();
   else if (id === 'menu') toMenu();
   else if (id === 'vehicle') goTo('car');
-  else if (id === 'place') beginPlacing();
+  else if (id === 'place') beginSetup();
   else if (id === 'goto:board') goTo('board');
   else if (id === 'allpegs') { for (const p of s.pegs) H.board.setPeg(p.id, 'set'); s.setAllPegs(now()); enterWire(); return; }
   else if (id === 'showme') showMe();
@@ -466,10 +570,16 @@ function header(g, kicker, title, langSwitch = false) {
 }
 
 const views = {
-  place(g) {
+  setup_board(g) {
     header(g, t('placeKicker'), t('placeTitle'));
     const y = g.para(t('placeText'), L, 190, R - L, { size: 30 });
     if (!placement.onSurface) g.para(t('placeNoSurface'), L, y + 30, R - L, { size: 26, colour: '#f7a35c' });
+  },
+
+  setup_car(g) {
+    header(g, t('carPlaceKicker'), t('carPlaceTitle'));
+    const y = g.para(t('carPlaceText'), L, 190, R - L, { size: 30 });
+    if (!placement.onSurface) g.para(t('carNoSurface'), L, y + 30, R - L, { size: 26, colour: '#f7a35c' });
   },
 
   menu(g) {
@@ -570,7 +680,7 @@ function refresh() {
     panel.draw((g) => header(g, 'FORMBOARD VR', t('loadingHarness')));
     return;
   }
-  panel.draw(ui.placing ? views.place : views[H.session.state]);
+  panel.draw(ui.setup ? views['setup_' + ui.setup] : views[H.session.state]);
 }
 
 // --- frame loop ---
@@ -583,23 +693,41 @@ function frame() {
 
   const hover = new Map(panels.map((x) => [x, null]));
   let marker = null;
-  if (ui.placing) {
-    const pose = placement.update();
-    if (pose) {
+  if (ui.setup) {
+    const pose = placement.update(ui.setup);
+    if (pose && ui.setup === 'board') {
       station.position.set(pose.x, pose.y, pose.z);
       station.rotation.set(0, pose.yaw, 0);
       updateLight();
-      placeVehicle();
     }
+    if (pose && ui.setup === 'car') { mrCar = pose; placeVehicle(); }
     if (placement.onSurface !== ui.lastOnSurface) { ui.lastOnSurface = placement.onSurface; refresh(); }
   }
   for (const p of pointers.update()) {
-    // Placing the board in MR: the first pinch or trigger puts it down, nothing else reacts.
-    if (ui.placing) {
-      if (p !== pointers.mouse && (p.justPressed || p.justPinched)) { endPlacing(); p.pinchUsed = true; p.pressOnPanel = true; }
+    // MR setup: the first pinch or trigger puts the board (then the car) down, nothing else reacts.
+    if (ui.setup) {
+      if (p !== pointers.mouse && (p.justPressed || p.justPinched)) { confirmSetup(); p.pinchUsed = true; p.pressOnPanel = true; }
       continue;
     }
     const mouse = p === pointers.mouse;
+    // MR: carrying the board or the car by its handle. Nothing else reacts to that hand meanwhile.
+    if (!mouse && xrMode === 'mr' && owner !== p) {
+      if (moving?.p === p) {
+        if (p.enabled && p.pinching && p.tip) dragTo(p.tip);
+        else endMove();
+        p.work = { mm: null, pressed: false, justPressed: false, canGrab: false, grab: TIP_GRAB_MM, freeEnd: null };
+        continue;
+      }
+      if (!moving && p.tip && pointers.pinchFresh(p)) {
+        const what = handleNear(p.tip);
+        if (what) {
+          startMove(what, p);
+          p.pinchUsed = true;
+          p.work = { mm: null, pressed: false, justPressed: false, canGrab: false, grab: TIP_GRAB_MM, freeEnd: null };
+          continue;
+        }
+      }
+    }
     // Board work. VR: direct touch at the fingertips (pinch point), no ray. Desktop: mouse ray.
     let nearBoard = false;
     if (mouse) {
@@ -653,10 +781,11 @@ function frame() {
     if (p.work.justPressed && H.session) { sfx.unlock(); onBoardPress(p); }
   }
   for (const [x, id] of hover) x.setHover(id);
+  updateHandleGlow();
   loco.showMarker(marker);
   loco.update(dt, pointers.list);
 
-  if (!ui.placing && H.session?.state === 'route' && attempt) {
+  if (!ui.setup && H.session?.state === 'route' && attempt) {
     if (!owner) {
       for (const p of pointers.list) {
         if (!p.enabled || !p.work?.canGrab || p.pressOnPanel) continue;
@@ -720,7 +849,7 @@ async function startXR(mode) {
     setMode(mode);
     session.addEventListener('end', () => { placement.reset(); setMode('desktop'); });
     await renderer.xr.setSession(session);
-    if (mode === 'mr') { await placement.begin(session); beginPlacing(); }
+    if (mode === 'mr') { await placement.begin(session); beginSetup(); }
   } catch (e) {
     console.warn('XR session failed', e);
     setMode('desktop');
@@ -741,8 +870,12 @@ function setMode(mode) {
   for (const s of H.board?.struts ?? []) s.visible = !mr;
   carPanel.mesh.visible = !mr;
   loco.enabled = !mr;
+  if (boardHandle) boardHandle.visible = mr;
+  if (carHandle) carHandle.visible = mr;
+  moving = null;
   if (!mr) {
-    ui.placing = false;
+    ui.setup = null;
+    mrCar = null;
     placement.end();
     station.position.set(0, 0.74, -0.45);
     station.rotation.set(0, 0, 0);
@@ -754,19 +887,29 @@ function setMode(mode) {
   if (mode === 'desktop') fitCamera();
 }
 
-function beginPlacing() {
+// MR setup: first the board onto a table, then the car onto the floor. Afterwards both can be
+// moved freely by their handles; "Set up again" in the menu repeats the setup.
+function beginSetup() {
   if (xrMode !== 'mr') return;
-  ui.placing = true;
+  ui.setup = 'board';
   ui.lastOnSurface = null;
+  moving = null;
+  mrCar = null;
+  placeVehicle();
   placement.active = true;
   refresh();
 }
 
-function endPlacing() {
-  ui.placing = false;
-  placement.end();
+function confirmSetup() {
   sfx.snap();
-  updateVehicleSign(); // the sign above the small car faces the user again
+  ui.lastOnSurface = null;
+  if (ui.setup === 'board') {
+    ui.setup = 'car';
+  } else {
+    ui.setup = null;
+    placement.end();
+    updateVehicleSign(); // the sign above the car faces the user
+  }
   refresh();
 }
 await loadHarness(0);
@@ -780,4 +923,5 @@ window.addEventListener('resize', () => {
 });
 
 // Debug handle. step() renders one frame by hand, for scripted tests when the page gets no animation frames.
-window.formboard = { H, panel, carPanel, camera, step: frame, load: loadHarness, setView, setMode, placement, station, ui };
+window.formboard = { H, panel, carPanel, camera, step: frame, load: loadHarness, setView, setMode, placement, station, ui, beginSetup, confirmSetup,
+  handles: { near: handleNear, start: startMove, drag: dragTo, end: endMove, get board() { return boardHandle; }, get car() { return carHandle; }, get mrCar() { return mrCar; } } };

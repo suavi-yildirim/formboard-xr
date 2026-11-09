@@ -44,11 +44,16 @@
 
 Press *Enter MR* instead of *Enter VR* to work in your own room. The Quest 3 cameras show the room, and the board, wires and panel are overlaid on it.
 
-1. **Place the board.** Look at your table: the board follows your view and sits on the table, facing you. Pinch (or pull the trigger) to put it down. *Place board* in the menu moves it again later.
-2. **Work as in VR.** Wires, pegs and the panel behave the same. Shadows of the board, wires and your hands fall on the real table.
-3. **The car** stands 1:1 on your floor, next to the board. In a small room it reaches through your walls.
+A short setup comes first:
 
-Without a table in the Quest's Space Setup, the board is placed at standard table height (74 cm) along your gaze. There is no teleport or stick movement in MR: you walk in the real room, so the board stays on your table.
+1. **Place the board.** Look at your table: the board follows your view and sits on the table, facing you. Pinch (or pull the trigger) to put it down.
+2. **Place the car.** Look at the floor where the car should stand (1:1, about 4 × 1.6 m). It follows your view; pinch to put it down. In a small room it reaches through your walls.
+
+Then you work as in VR: wires, pegs and the panel behave the same, and shadows of the board, wires and your hands fall on the real table.
+
+**Move them any time.** Walk up, pinch the cyan bar below the board, and carry the board where you want it; it keeps facing you. The car has a cyan knob on a post at its engine end: pinch it and carry the car across the floor. The handles light up when your fingers come close. *Set up again* in the menu repeats the setup.
+
+Without a Space Setup, the board goes to standard table height (74 cm) along your gaze, and the car to where your gaze meets the floor. There is no teleport or stick movement in MR: you walk in the real room.
 
 ## Controls
 
@@ -57,7 +62,7 @@ Without a table in the Quest's Space Setup, the board is placed at standard tabl
 | Wires, pegs | Pinch at the wire end or peg | Trigger at the controller tip | Left-drag on the board |
 | Panel buttons | Point and pinch | Point and trigger | Left-click |
 | Moving | Walk; *Go to car* / *Back to the formboard* | Grip button: aim at the floor, release to teleport. Left stick walks, right stick turns 30° | Right-drag look, Shift + right-drag or arrow keys pan, scroll zoom |
-| Mixed reality | *Enter MR*, look at the table, pinch to place the board | Same, with the trigger | (not available) |
+| Mixed reality | *Enter MR*: look at the table, pinch (board); look at the floor, pinch (car). Pinch a cyan handle to carry board or car | Same, with the trigger | (not available) |
 | Language | EN \| DE on the menu panel | EN \| DE on the menu panel | EN \| DE in the help box |
 
 Open the link in the Quest Browser and press *Enter VR* or *Enter MR*. Desktop browsers have no WebXR, so there the app runs in desktop mode.

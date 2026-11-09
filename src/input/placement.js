@@ -1,8 +1,8 @@
-// Mixed reality: find the real table the user looks at (WebXR hit-test against the Quest's room
+// Mixed reality: find the real table (board) or floor spot (car) the user looks at (WebXR hit-test against the Quest's room
 // scan from Space Setup). Without hit-test results, the gaze meets a plane at table height instead.
 // The maths (is it a table, which way to face) is in core/placement.js.
 import * as THREE from 'three';
-import { stationPose, fallbackPoint } from '../core/placement.js';
+import { stationPose, carPose, fallbackPoint, floorPoint } from '../core/placement.js';
 
 export class Placement {
   constructor(renderer, scene) {
@@ -42,12 +42,15 @@ export class Placement {
     this.end();
   }
 
-  // Pose for the workstation this frame ({x, y, z, yaw}), or null.
-  update() {
+  // Pose for this frame, or null. target 'board': the workstation on a table ({x, y, z, yaw});
+  // target 'car': the car on the floor ({x, z, yaw}).
+  update(target = 'board') {
     if (!this.active) return null;
+    const car = target === 'car';
+    const toPose = car ? carPose : stationPose;
     const cam = this.renderer.xr.getCamera();
     const head = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
-    let pose = null;
+    let pose = null, surfaceY = 0;
     const frame = this.renderer.xr.getFrame();
     const space = this.renderer.xr.getReferenceSpace();
     if (this.source && frame && space) {
@@ -56,18 +59,18 @@ export class Placement {
         if (!p) continue;
         const { position: q, orientation: o } = p.transform;
         const normal = new THREE.Vector3(0, 1, 0).applyQuaternion(new THREE.Quaternion(o.x, o.y, o.z, o.w));
-        pose = stationPose({ x: q.x, y: q.y, z: q.z }, normal, head);
-        if (pose) break;
+        pose = toPose({ x: q.x, y: q.y, z: q.z }, normal, head);
+        if (pose) { surfaceY = q.y; break; }
       }
     }
     this.onSurface = !!pose;
     if (!pose) {
       const dir = new THREE.Vector3(0, 0, -1).transformDirection(cam.matrixWorld);
-      const point = fallbackPoint(head, dir);
-      if (point) pose = stationPose(point, null, head);
+      const point = car ? floorPoint(head, dir) : fallbackPoint(head, dir);
+      if (point) { pose = toPose(point, null, head); surfaceY = point.y; }
     }
     this.reticle.visible = !!pose;
-    if (pose) this.reticle.position.set(pose.x, pose.y + 0.003, pose.z);
+    if (pose) this.reticle.position.set(pose.x, surfaceY + 0.003, pose.z);
     return pose;
   }
 }
