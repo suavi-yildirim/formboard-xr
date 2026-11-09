@@ -48,9 +48,9 @@ FINISH = [(150.8, 160.8, CROP, 'last'),        # the last five wires, grab 151.5
           (186.5, 192.3, None, 'qa'),          # the three checks, ticked 187.9 ... 191.6
           (167.0, 176.0, None, 'incar')]
 
-LOGOS = [  # FAU (dark blue, on a white plate) top left, FAPS (green) top right, during the first seconds
-    {'img': f'{WORK}/fau.png', 'pos': 'tl', 'h': 56, 'badge': True},
-    {'img': f'{WORK}/faps.jpg', 'pos': 'tr', 'h': 84},
+LOGOS = [  # FAU (dark blue PNG, transparent) top left, FAPS (green) top right, during the first seconds
+    {'img': f'{WORK}/fau.png', 'pos': 'tl', 'h': 84},
+    {'img': f'{WORK}/faps.jpg', 'pos': 'tr', 'h': 126},
 ]
 LOGO_S = 4.5
 
@@ -81,7 +81,8 @@ def build(name, segs, kbps, cards=()):
     caps = [c for c in caps if c['e'] - c['s'] > 1.0]
     caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l} for l in LOGOS]
     if cards:  # the end card shows the logos again
-        caps += [{'s': total - 3.2, 'e': total - 0.05, 't': '', **l} for l in LOGOS]
+        # on the darkened end card the dark blue FAU logo needs a white plate
+        caps += [{'s': total - 3.2, 'e': total - 0.05, 't': '', **l, 'badge': l['pos'] == 'tl'} for l in LOGOS]
     jf = f'{WORK}/{name}.json'
     json.dump(caps, open(jf, 'w'), ensure_ascii=False, indent=1)
     out = f"{OUTDIR['full'] if name.endswith('full') else ROOT + '/demo/media'}/{name}.mp4"
