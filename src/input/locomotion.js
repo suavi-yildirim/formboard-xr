@@ -14,6 +14,9 @@ export class Locomotion {
     this.renderer = renderer;
     this.base = null;
     this.rig = { x: 0, z: 0, yaw: 0 };
+    // Off in mixed reality: the user walks in the real room, and moving the virtual world would
+    // pull the board off the real table.
+    this.enabled = true;
     this.floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
     this.marker = new THREE.Group();
@@ -31,7 +34,7 @@ export class Locomotion {
     renderer.xr.addEventListener('sessionend', () => { this.base = null; });
   }
 
-  get active() { return !!this.base; }
+  get active() { return !!this.base && this.enabled; }
 
   // Floor point the ray points at, or null (pointing up, too far, outside the room).
   floorHit(ray) {

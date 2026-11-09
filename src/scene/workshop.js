@@ -24,6 +24,9 @@ function floorTexture() {
 
 export function buildWorkshop(scene) {
   scene.background = new THREE.Color(0x1b1f26);
+  // Room decor, hidden in mixed reality (the real room takes its place). Lights stay.
+  const decor = new THREE.Group();
+  scene.add(decor);
   scene.fog = new THREE.Fog(0x1b1f26, 6, 14);
 
   scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2622, 0.5));
@@ -43,18 +46,18 @@ export function buildWorkshop(scene) {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.75 }));
   floor.receiveShadow = true;
   floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
+  decor.add(floor);
 
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x2b3038, roughness: 1 });
   const back = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), wallMat);
   back.position.set(0, 2, -3);
-  scene.add(back);
+  decor.add(back);
   // Safety marking around the workstation, like tape on a shop floor.
   const tape = new THREE.Mesh(new THREE.RingGeometry(1.45, 1.5, 4, 1, Math.PI / 4), new THREE.MeshBasicMaterial({ color: 0xf2c80f }));
   tape.rotation.x = -Math.PI / 2;
   tape.position.set(0, 0.002, -0.35);
   tape.scale.set(1.2, 0.8, 1);
-  scene.add(tape);
+  decor.add(tape);
 
   const metal = new THREE.MeshStandardMaterial({ color: 0x8a9099, metalness: 0.7, roughness: 0.35 });
   const top = new THREE.MeshStandardMaterial({ color: 0x5b6470, roughness: 0.6 });
@@ -71,7 +74,7 @@ export function buildWorkshop(scene) {
     bench.add(leg);
   }
   bench.position.set(0, 0, -0.45);
-  scene.add(bench);
+  decor.add(bench);
 
   // Wire spool rack next to the bench, as set dressing.
   const rack = new THREE.Group();
@@ -92,7 +95,7 @@ export function buildWorkshop(scene) {
   }
   rack.position.set(-1.75, 0, -1.25);
   rack.rotation.y = 0.5;
-  scene.add(rack);
+  decor.add(rack);
 
-  return { metal, key };
+  return { metal, key, decor };
 }

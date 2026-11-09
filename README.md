@@ -40,6 +40,16 @@
 - **Parts from the KBL.** Connector housings are sized by cavity count and coloured from the part description. Spark-plug connectors are rubber boots, ring terminals are copper lugs, and splices are heat-shrink sleeves. Wires show their base and tracer colours.
 - **A real formboard.** The board is plywood with the 1:1 drawing glued on, sized to the harness, at working height within arm's reach. Pegs, wires, connectors and your hands cast shadows, which helps you judge depth.
 
+### Mixed reality
+
+Press *Enter MR* instead of *Enter VR* to work in your own room. The Quest 3 cameras show the room, and the board, wires and panel are overlaid on it.
+
+1. **Place the board.** Look at your table: the board follows your view and sits on the table, facing you. Pinch (or pull the trigger) to put it down. *Place board* in the menu moves it again later.
+2. **Work as in VR.** Wires, pegs and the panel behave the same. Shadows of the board, wires and your hands fall on the real table.
+3. **The car** stands 1:1 on your floor, next to the board. In a small room it reaches through your walls.
+
+Without a table in the Quest's Space Setup, the board is placed at standard table height (74 cm) along your gaze. There is no teleport or stick movement in MR: you walk in the real room, so the board stays on your table.
+
 ## Controls
 
 | | Quest 3 (hands) | Quest 3 (controllers) | Desktop |
@@ -47,9 +57,10 @@
 | Wires, pegs | Pinch at the wire end or peg | Trigger at the controller tip | Left-drag on the board |
 | Panel buttons | Point and pinch | Point and trigger | Left-click |
 | Moving | Walk; *Go to car* / *Back to the formboard* | Grip button: aim at the floor, release to teleport. Left stick walks, right stick turns 30° | Right-drag look, Shift + right-drag or arrow keys pan, scroll zoom |
+| Mixed reality | *Enter MR*, look at the table, pinch to place the board | Same, with the trigger | (not available) |
 | Language | EN \| DE on the menu panel | EN \| DE on the menu panel | EN \| DE in the help box |
 
-Open the link in the Quest Browser and press *Enter VR*. Desktop browsers have no WebXR, so there the app runs in desktop mode.
+Open the link in the Quest Browser and press *Enter VR* or *Enter MR*. Desktop browsers have no WebXR, so there the app runs in desktop mode.
 
 ## From KBL to formboard
 
@@ -91,7 +102,7 @@ Code: MIT licence. Data derived from the VW sample: CC BY-SA 4.0.
 
 ## Roadmap
 
-- Mixed reality on a physical board: Quest passthrough, with the board registered by markers on opposite corners or by a two-point touch calibration
+- Mixed reality on the physical board: register the virtual drawing on a real Panduit board, by markers on opposite corners or by a two-point touch calibration (the MR mode already places it on a real table)
 - Unity 6 + Meta XR SDK port for the lab version, using the same harness data
 - Study mode: compare guided and test runs, and paper vs. VR instructions, from the logged times and errors
 - Real formboard layouts from the harness CAD export, when available, instead of flattening

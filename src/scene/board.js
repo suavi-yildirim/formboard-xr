@@ -158,12 +158,15 @@ export class Board {
     back.position.z = -0.0126;
     back.castShadow = back.receiveShadow = true;
     this.group.add(back);
-    // Rear struts down to the bench, so the tilted board does not float.
+    // Rear struts down to the bench, so the tilted board does not float. In mixed reality they are
+    // hidden: they would reach through the real table top.
+    this.struts = [];
     for (const x of [-W / 2 + 0.15, W / 2 - 0.15]) {
       const strut = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.5, 0.03), this.metal);
       strut.position.set(x, -H / 2 + 0.12, -0.3);
       strut.rotation.x = 0.55;
       this.group.add(strut);
+      this.struts.push(strut);
     }
   }
 

@@ -1,6 +1,5 @@
 // Formboard VR: wires the pure core (session, router) to the three.js scene and the pointers.
 import * as THREE from 'three';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { validateHarness, variants, wiresForVariant, nodePositions, bundleSlots, wirePolyline, nodeById, COLOURS } from './core/harness.js';
@@ -21,13 +20,14 @@ import { t, term, colourName, getLang, setLang, onLangChange } from './i18n.js';
 import { Locomotion } from './input/locomotion.js';
 import { heldWire } from './core/heldwire.js';
 import { WIRE_Z } from './scene/wires.js';
+import { Placement } from './input/placement.js';
 
 const dataUrl = (f) => new URL(`./data/${f}`, import.meta.url);
 const getJson = async (f) => (await fetch(dataUrl(f))).json();
 const catalogue = await getJson('harnesses.json');
 
 // --- renderer, scene, camera ---
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // alpha: passthrough in MR
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
@@ -37,11 +37,13 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.xr.setFoveation?.(0.5);
 document.body.appendChild(renderer.domElement);
-// Without immersive VR support (desktop browsers, Safari) show a plain note instead of the
-// "WEBXR NOT AVAILABLE" / "VR NOT SUPPORTED" button.
+// Enter VR (virtual workshop) or Enter MR (the real room through the Quest cameras). Without
+// WebXR (desktop browsers, Safari) a plain note replaces the buttons.
 const vrSupported = await navigator.xr?.isSessionSupported?.('immersive-vr').catch(() => false);
-if (vrSupported) document.body.appendChild(VRButton.createButton(renderer));
-else document.getElementById('vr-note').hidden = false;
+const mrSupported = await navigator.xr?.isSessionSupported?.('immersive-ar').catch(() => false);
+document.getElementById('enter-vr').hidden = !vrSupported;
+document.getElementById('enter-mr').hidden = !mrSupported;
+if (!vrSupported && !mrSupported) document.getElementById('vr-note').hidden = false;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 50);
@@ -82,17 +84,40 @@ function setView(v) {
 }
 backButton.addEventListener('click', () => setView('board'));
 
-const { metal, key } = buildWorkshop(scene);
+const { metal, key, decor } = buildWorkshop(scene);
+const VR_BACKGROUND = scene.background, VR_FOG = scene.fog;
+
+// The workstation (board, panel) moves as one: on the bench in VR, onto the real table in MR.
+// Its origin is on the table top, +z towards the user.
+const station = new THREE.Group();
+station.position.set(0, 0.74, -0.45);
+scene.add(station);
+// In MR the shadows of board, wires and hands fall on the real table (only the shadow is drawn).
+const shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.35 }));
+shadowCatcher.position.y = 0.002;
+shadowCatcher.receiveShadow = true;
+shadowCatcher.visible = false;
+station.add(shadowCatcher);
+const KEY_OFFSET = new THREE.Vector3(0.6, 1.8, 1.38); // work light above and in front of the board
+
+// Keep the shadow-casting work light on the board wherever the station is.
+function updateLight() {
+  if (!H.board) return;
+  station.updateMatrixWorld(true);
+  H.board.group.getWorldPosition(key.target.position);
+  key.position.copy(key.target.position).add(KEY_OFFSET.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), station.rotation.y));
+}
 // Soft studio reflections for metal, plastic and insulation (computed once, no download).
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 const panel = new Panel();
-panel.mesh.position.set(-0.82, 1.28, -0.3);
+panel.mesh.position.set(-0.82, 0.54, 0.15);
 panel.mesh.rotation.y = 0.6;
-scene.add(panel.mesh);
+station.add(panel.mesh);
 
 const sfx = new Sfx();
 const pointers = new Pointers(renderer, scene, camera, renderer.domElement);
 const loco = new Locomotion(renderer, scene);
+const placement = new Placement(renderer, scene);
 
 // Jump spots (floor position and the point to face). The car spot is beside the engine end.
 const SPOTS = {
@@ -128,12 +153,22 @@ function goTo(spot) {
 let vehicle = null;
 getJson('vw_vehicle.json').then((data) => {
   vehicle = new VehicleView(data);
-  vehicle.group.position.set(2.5, vehicle.liftM, -0.9);
-  vehicle.group.rotation.y = -Math.PI / 2;
   scene.add(vehicle.group);
+  placeVehicle();
   updateVehicleSign();
   refresh();
 });
+
+// The car stands 1:1 on the floor next to the workstation (2.5 m to its right, engine end towards
+// the user), in VR as in MR: wherever the board is placed, the car comes along.
+const CAR_OFFSET = new THREE.Vector3(2.5, 0, -0.45);
+function placeVehicle() {
+  if (!vehicle) return;
+  station.updateMatrixWorld(true);
+  const p = station.localToWorld(CAR_OFFSET.clone());
+  vehicle.group.position.set(p.x, vehicle.liftM, p.z);
+  vehicle.group.rotation.set(0, station.rotation.y - Math.PI / 2, 0);
+}
 
 function updateVehicleSign() {
   if (!vehicle) return;
@@ -143,12 +178,13 @@ function updateVehicleSign() {
     t('sign2', { n: d.full.length, id: d.full_id, c: d.full_connectors }),
     t('sign3', { id: d.highlight_id }),
     t('sign4'),
-  ], new THREE.Vector3(0, 1.4, 0));
+  ], station.localToWorld(new THREE.Vector3(0, 0.66, 0.45))); // the sign faces the user at the workstation
 }
 
 // --- harness-dependent state ---
 const H = { file: null, harness: null, pos: {}, nb: {}, vlist: [], problems: [], session: null, board: null, wires: null };
-const ui = { harnessIdx: 0, variant: 0, mode: 'guided', status: '', statusKind: '', ghostUntil: 0, lastSecond: -1, loading: false };
+let xrMode = 'desktop'; // 'desktop' | 'vr' | 'mr'
+const ui = { placing: false, harnessIdx: 0, variant: 0, mode: 'guided', status: '', statusKind: '', ghostUntil: 0, lastSecond: -1, loading: false };
 let attempt = null;
 let owner = null; // pointer currently holding the wire
 let polylines = {};
@@ -169,10 +205,11 @@ async function loadHarness(i) {
   H.board = new Board(h, metal);
   // Tilted like a desk easel, resting on the bench, within arm's reach of the standing user.
   const tilt = 0.7, heightM = H.board.size.h / 1000 + 0.09;
-  H.board.group.position.set(0, 0.765 + (heightM / 2) * Math.cos(tilt), -0.48);
+  H.board.group.position.set(0, 0.025 + (heightM / 2) * Math.cos(tilt), -0.03);
   H.board.group.rotation.x = -tilt;
-  key.target.position.copy(H.board.group.position);
-  scene.add(H.board.group);
+  station.add(H.board.group);
+  for (const s of H.board.struts ?? []) s.visible = xrMode !== 'mr'; // ?? []: an older cached board.js has none
+  updateLight();
   H.wires = new WireLayer(H.board);
   ui.harnessIdx = i;
   ui.variant = 0;
@@ -383,6 +420,7 @@ function onButton(id) {
   else if (id === 'start') startRun();
   else if (id === 'menu') toMenu();
   else if (id === 'vehicle') goTo('car');
+  else if (id === 'place') beginPlacing();
   else if (id === 'goto:board') goTo('board');
   else if (id === 'allpegs') { for (const p of s.pegs) H.board.setPeg(p.id, 'set'); s.setAllPegs(now()); enterWire(); return; }
   else if (id === 'showme') showMe();
@@ -428,6 +466,12 @@ function header(g, kicker, title, langSwitch = false) {
 }
 
 const views = {
+  place(g) {
+    header(g, t('placeKicker'), t('placeTitle'));
+    const y = g.para(t('placeText'), L, 190, R - L, { size: 30 });
+    if (!placement.onSurface) g.para(t('placeNoSurface'), L, y + 30, R - L, { size: 26, colour: '#f7a35c' });
+  },
+
   menu(g) {
     const h = H.harness;
     header(g, t('menuKicker'), term(h.description), true);
@@ -447,7 +491,8 @@ const views = {
     g.button('mode:guided', t('guided'), L, 526, 448, 60, { selected: ui.mode === 'guided' });
     g.button('mode:test', t('test'), L + 464, 526, 448, 60, { selected: ui.mode === 'test' });
     g.button('start', ui.loading ? t('loading') : t('start'), L, 610, 600, 80, { primary: true, size: 32, disabled: ui.loading });
-    g.button('vehicle', t('goCar'), L + 616, 610, 296, 80, { disabled: !vehicle, size: 26 });
+    if (xrMode === 'mr') g.button('place', t('placeBoard'), L + 616, 610, 296, 80, { size: 26 });
+    else g.button('vehicle', t('goCar'), L + 616, 610, 296, 80, { disabled: !vehicle, size: 26 });
   },
 
   prep(g) {
@@ -514,7 +559,8 @@ const views = {
       g.text(`${w.wire}  ${w.time_s.toFixed(1)} s  ${t('errShort', { n: w.errors })}`, x + 36, y, { size: Math.min(26, rowH * 0.62), colour: w.errors ? '#ffb3b3' : '#e9eef5', max: colW - 44 });
     });
     g.button('download', t('download'), L, 620, 290, 76);
-    g.button('vehicle', t('goCar'), L + 311, 620, 290, 76, { disabled: !vehicle });
+    if (xrMode === 'mr') g.button('place', t('placeBoard'), L + 311, 620, 290, 76);
+    else g.button('vehicle', t('goCar'), L + 311, 620, 290, 76, { disabled: !vehicle });
     g.button('again', t('again'), L + 622, 620, 290, 76, { primary: true });
   },
 };
@@ -524,7 +570,7 @@ function refresh() {
     panel.draw((g) => header(g, 'FORMBOARD VR', t('loadingHarness')));
     return;
   }
-  panel.draw(views[H.session.state]);
+  panel.draw(ui.placing ? views.place : views[H.session.state]);
 }
 
 // --- frame loop ---
@@ -537,7 +583,22 @@ function frame() {
 
   const hover = new Map(panels.map((x) => [x, null]));
   let marker = null;
+  if (ui.placing) {
+    const pose = placement.update();
+    if (pose) {
+      station.position.set(pose.x, pose.y, pose.z);
+      station.rotation.set(0, pose.yaw, 0);
+      updateLight();
+      placeVehicle();
+    }
+    if (placement.onSurface !== ui.lastOnSurface) { ui.lastOnSurface = placement.onSurface; refresh(); }
+  }
   for (const p of pointers.update()) {
+    // Placing the board in MR: the first pinch or trigger puts it down, nothing else reacts.
+    if (ui.placing) {
+      if (p !== pointers.mouse && (p.justPressed || p.justPinched)) { endPlacing(); p.pinchUsed = true; p.pressOnPanel = true; }
+      continue;
+    }
     const mouse = p === pointers.mouse;
     // Board work. VR: direct touch at the fingertips (pinch point), no ray. Desktop: mouse ray.
     let nearBoard = false;
@@ -564,6 +625,7 @@ function frame() {
     let hp = null, hitPanel = null;
     if (!nearBoard) {
       for (const x of panels) {
+        if (!x.mesh.visible) continue; // raycasts ignore visibility: a hidden panel must not catch clicks
         const h = p.raycaster.intersectObject(x.mesh)[0];
         if (h && (!hp || h.distance < hp.distance)) { hp = h; hitPanel = x; }
       }
@@ -594,7 +656,7 @@ function frame() {
   loco.showMarker(marker);
   loco.update(dt, pointers.list);
 
-  if (H.session?.state === 'route' && attempt) {
+  if (!ui.placing && H.session?.state === 'route' && attempt) {
     if (!owner) {
       for (const p of pointers.list) {
         if (!p.enabled || !p.work?.canGrab || p.pressOnPanel) continue;
@@ -647,8 +709,66 @@ onLangChange(applyLang);
 for (const b of document.querySelectorAll('[data-lang]')) b.addEventListener('click', () => setLang(b.dataset.lang));
 applyLang();
 
-renderer.xr.addEventListener('sessionstart', refresh);
-renderer.xr.addEventListener('sessionend', () => { refresh(); fitCamera(); });
+// --- VR and MR sessions ---
+async function startXR(mode) {
+  if (renderer.xr.isPresenting) { await renderer.xr.getSession().end(); return; }
+  const init = mode === 'mr'
+    ? { optionalFeatures: ['local-floor', 'hand-tracking', 'hit-test', 'plane-detection', 'anchors'] }
+    : { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking', 'layers'] };
+  try {
+    const session = await navigator.xr.requestSession(mode === 'mr' ? 'immersive-ar' : 'immersive-vr', init);
+    setMode(mode);
+    session.addEventListener('end', () => { placement.reset(); setMode('desktop'); });
+    await renderer.xr.setSession(session);
+    if (mode === 'mr') { await placement.begin(session); beginPlacing(); }
+  } catch (e) {
+    console.warn('XR session failed', e);
+    setMode('desktop');
+  }
+}
+document.getElementById('enter-vr').addEventListener('click', () => startXR('vr'));
+document.getElementById('enter-mr').addEventListener('click', () => startXR('mr'));
+
+// VR and desktop: the virtual workshop. MR: the real room, so no decor, background or fog, the
+// workstation goes onto a real table, and nobody teleports.
+function setMode(mode) {
+  xrMode = mode;
+  const mr = mode === 'mr';
+  scene.background = mr ? null : VR_BACKGROUND;
+  scene.fog = mr ? null : VR_FOG;
+  decor.visible = !mr;
+  shadowCatcher.visible = mr;
+  for (const s of H.board?.struts ?? []) s.visible = !mr;
+  carPanel.mesh.visible = !mr;
+  loco.enabled = !mr;
+  if (!mr) {
+    ui.placing = false;
+    placement.end();
+    station.position.set(0, 0.74, -0.45);
+    station.rotation.set(0, 0, 0);
+    updateLight();
+  }
+  placeVehicle();
+  updateVehicleSign();
+  refresh();
+  if (mode === 'desktop') fitCamera();
+}
+
+function beginPlacing() {
+  if (xrMode !== 'mr') return;
+  ui.placing = true;
+  ui.lastOnSurface = null;
+  placement.active = true;
+  refresh();
+}
+
+function endPlacing() {
+  ui.placing = false;
+  placement.end();
+  sfx.snap();
+  updateVehicleSign(); // the sign above the small car faces the user again
+  refresh();
+}
 await loadHarness(0);
 renderer.setAnimationLoop(frame);
 
@@ -660,4 +780,4 @@ window.addEventListener('resize', () => {
 });
 
 // Debug handle. step() renders one frame by hand, for scripted tests when the page gets no animation frames.
-window.formboard = { H, panel, carPanel, camera, step: frame, load: loadHarness, setView };
+window.formboard = { H, panel, carPanel, camera, step: frame, load: loadHarness, setView, setMode, placement, station, ui };

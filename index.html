@@ -12,6 +12,11 @@
     #back-to-board { position: absolute; top: 16px; left: 16px; padding: 10px 16px; border: 0; border-radius: 10px;
                      background: #5ce1ff; color: #0d1117; font: 600 15px system-ui, sans-serif; cursor: pointer; }
     #back-to-board[hidden] { display: none; }
+    #xr-buttons { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+    #xr-buttons button { padding: 12px 22px; border: 1px solid rgba(255,255,255,0.6); border-radius: 6px; background: rgba(0,0,0,0.35);
+                         color: #fff; font: 600 14px system-ui, sans-serif; letter-spacing: 0.04em; cursor: pointer; }
+    #xr-buttons button:hover { background: rgba(92,225,255,0.25); }
+    #xr-buttons button[hidden] { display: none; }
     #info b { color: #5ce1ff; }
     #info p { margin: 6px 0 0; color: #c5ceda; }
     #info table { margin-top: 6px; border-collapse: collapse; color: #c5ceda; }
@@ -50,6 +55,10 @@
     </table>
   </div>
   <button id="back-to-board" hidden data-i18n="backToBoard">← Back to formboard</button>
+  <div id="xr-buttons">
+    <button id="enter-vr" hidden data-i18n="enterVR">ENTER VR</button>
+    <button id="enter-mr" hidden data-i18n="enterMR">ENTER MR</button>
+  </div>
   <script>
     // Help box slides out to the right; the choice is remembered per browser when storage is available.
     (() => {

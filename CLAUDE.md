@@ -22,7 +22,10 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
   - In VR, board work happens at the **pinch point** (`p.tip`), not by ray.
   - Rays only serve the panel and teleport.
   - The mouse uses a ray onto the board.
-- The debug handle `window.formboard` exposes `H, panel, carPanel, camera, step, load, setView`.
+- The debug handle `window.formboard` exposes `H, panel, carPanel, camera, step, load, setView, setMode, placement, station, ui`.
+- Board and panel live in the `station` group (origin on the table top, +z towards the user). VR keeps it on the
+  bench at (0, 0.74, −0.45). MR moves it onto the real table. The work light (`updateLight`) and the 1:1 car
+  (`placeVehicle`, 2.5 m to the station's right, on the floor) follow it.
 
 ## What the user tested on the Quest and decided (keep these)
 
@@ -49,6 +52,18 @@ Live: https://suavi-yildirim.github.io/formboard-vr/ · demo: `/demo/` (EN, `#de
 - Flattening keeps every KBL `Virtual_length`. The VW KBL wire lengths equal the board paths to the millimetre.
 - Ring terminals are placed on nodes via `Special_terminal_occurrence` with the same Id as the connector.
 - The fictitious door harness has made-up wire lengths. Its slack is capped at 1.6 × path length.
+
+## Mixed reality (Enter MR)
+
+- `immersive-ar` session with `hit-test`; placement maths in `core/placement.js` (tested), XR part in `input/placement.js`.
+  - Gaze hit-test against the Quest's Space Setup. Only surfaces with an upward normal count as tables.
+  - Fallback: the gaze meets a plane at 0.74 m, kept 0.3–1.2 m in front.
+- MR hides the workshop decor (`decor` group), background, fog, car panel and board struts. It shows a shadow catcher on the table.
+- MR turns off locomotion: no teleport, sticks or jumps, because moving the world would pull the board off the table.
+- "Place board" replaces "Go to car" on the panel.
+- The renderer needs `alpha: true`. With a null background, three.js clears to transparent in alpha-blend mode.
+- Not yet tested on the Quest (as of the first MR version). Hit-test results, passthrough look and table height need the user's check.
+- Raycasts ignore `visible`: skip hidden panels explicitly, or they swallow clicks.
 
 ## Testing without a headset
 
