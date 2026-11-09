@@ -47,21 +47,34 @@ function label(text) {
   return s;
 }
 
+const DEFAULT = 'vw_movo.json';
+
 export class VehicleView {
   constructor(data) {
     this.group = new THREE.Group();
     const full = new THREE.Mesh(tubes(data.full), new THREE.MeshStandardMaterial({ color: 0x9fb0c4, roughness: 0.55 }));
     this.glow = new THREE.MeshStandardMaterial({ color: 0xf07b16, emissive: 0xf07b16, emissiveIntensity: 0.6, roughness: 0.4 });
-    const hl = new THREE.Mesh(tubes(data.highlight, 1.6), this.glow);
-    this.group.add(full, hl);
-
-    for (const c of data.connectors) {
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.009, 10, 6), new THREE.MeshBasicMaterial({ color: 0xffd29a }));
-      dot.position.set(...c.p);
-      const l = label(c.label);
-      l.position.set(c.p[0], c.p[1] + 0.035, c.p[2]);
-      this.group.add(dot, l);
-    }
+    this.group.add(full);
+    // Highlights: the default one (the ignition harness, highlight) and pieces cut out of the full
+    // harness (data.pieces, by harness file). One is shown at a time, for the harness being built.
+    this.pieces = {};
+    const build = (hl, connectors, id) => {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(tubes(hl, 1.6), this.glow));
+      for (const c of connectors) {
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.009, 10, 6), new THREE.MeshBasicMaterial({ color: 0xffd29a }));
+        dot.position.set(...c.p);
+        const l = label(c.label);
+        l.position.set(c.p[0], c.p[1] + 0.035, c.p[2]);
+        g.add(dot, l);
+      }
+      g.visible = false;
+      this.group.add(g);
+      return { g, id };
+    };
+    this.pieces[DEFAULT] = build(data.highlight, data.connectors, data.highlight_id);
+    for (const [file, pc] of Object.entries(data.pieces ?? {})) this.pieces[file] = build(pc.highlight, pc.connectors, pc.highlight_id);
+    this.setPiece(DEFAULT);
 
     // Approximate vehicle footprint on the floor for scale (Beetle: about 4.1 m x 1.55 m).
     const outline = new THREE.Mesh(new THREE.RingGeometry(0.98, 1, 64), new THREE.MeshBasicMaterial({ color: 0x5ce1ff, transparent: true, opacity: 0.35 }));
@@ -89,6 +102,14 @@ export class VehicleView {
     this.group.updateMatrixWorld(true);
     s.lookAt(lookAt);
   }
+
+  // Show the highlight for this harness file (the default one for harnesses not in the car data).
+  setPiece(file) {
+    this.pieceFile = this.pieces[file] ? file : DEFAULT;
+    for (const [f, p] of Object.entries(this.pieces)) p.g.visible = f === this.pieceFile;
+  }
+
+  get pieceId() { return this.pieces[this.pieceFile].id; }
 
   get liftM() { return 0.35; } // harness z=0 sits about this high above the road
 

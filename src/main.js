@@ -8,6 +8,9 @@ import { RoutingAttempt, GRAB_MM, neighbourMap } from './core/router.js';
 
 const TIP_GRAB_MM = 30; // fingertips must be this close to the wire end (or a ghost peg) to take it
 import { Session, QA_ITEMS } from './core/session.js';
+import { cavityLayout, insertTarget } from './core/cavity.js';
+import { InsertAttempt } from './core/insert.js';
+import { FaceView } from './scene/faceview.js';
 import { panelPress } from './core/press.js';
 import { buildWorkshop } from './scene/workshop.js';
 import { Board } from './scene/board.js';
@@ -154,6 +157,7 @@ function goTo(spot) {
 let vehicle = null;
 getJson('vw_vehicle.json').then((data) => {
   vehicle = new VehicleView(data);
+  if (H.file) vehicle.setPiece(H.file);
   scene.add(vehicle.group);
   carHandle = makeCarHandle();
   carTurn = makeCarTurn();
@@ -191,7 +195,7 @@ function updateVehicleSign() {
   vehicle.setSign([
     t('sign1'),
     t('sign2', { n: d.full.length, id: d.full_id, c: d.full_connectors }),
-    t('sign3', { id: d.highlight_id }),
+    t('sign3', { id: vehicle.pieceId, name: term(catalogue.find((c) => c.file === vehicle.pieceFile)?.label ?? '') }),
     t('sign4'),
   ], xrMode === 'mr' ? headPosition() : station.localToWorld(new THREE.Vector3(0, 0.66, 0.45))); // the sign faces the user
 }
@@ -317,6 +321,8 @@ let xrMode = 'desktop'; // 'desktop' | 'vr' | 'mr'
 const ui = { setup: null, // MR setup step: 'board', then 'car', then null
    harnessIdx: 0, variant: 0, mode: 'guided', status: '', statusKind: '', ghostUntil: 0, lastSecond: -1, loading: false };
 let attempt = null;
+// Inserting the wire end into its cavity, after the route is done: { tg: insertTarget(), attempt }
+let inserting = null;
 let owner = null; // pointer currently holding the wire
 let polylines = {};
 const now = () => performance.now();
@@ -345,12 +351,28 @@ async function loadHarness(i) {
   for (const s of H.board.struts ?? []) s.visible = xrMode !== 'mr'; // ?? []: an older cached board.js has none
   updateLight();
   H.wires = new WireLayer(H.board);
+  H.face = new FaceView(H.board);
+  if (vehicle) { vehicle.setPiece(H.file); updateVehicleSign(); }
   ui.harnessIdx = i;
   ui.variant = 0;
   ui.loading = false;
   attempt = null;
+  inserting = null;
   owner = null;
   refresh();
+}
+
+const hexOf = (w) => COLOURS[w.colour] ?? 0xcccccc;
+const multiPole = (nodeId) => (nodeById(H.harness, nodeId)?.cavity_numbers?.length ?? 0) >= 2;
+
+// Seat the start end of a wire in its cavity (shown done: the user inserts the other end).
+function seatStart(w) {
+  if (multiPole(w.from_node)) H.board.seat(`${w.id}:from`, w.from_node, w.from_cavity, hexOf(w));
+}
+
+function endInsert() {
+  inserting = null;
+  H.face?.hide();
 }
 
 const connLabel = (w, end) => {
@@ -367,6 +389,8 @@ function startRun() {
   wires.clearLive();
   wires.clearGhost();
   wires.setHandle(null);
+  board.clearSeats();
+  endInsert();
   for (const id of Object.keys(board.pegs)) board.setPeg(id, 'hidden');
   for (const p of session.pegs) board.setPeg(p.id, 'ghost');
   board.setHalos([]);
@@ -379,6 +403,7 @@ function startRun() {
 function toMenu() {
   H.session.restart();
   attempt = null;
+  endInsert();
   owner = null;
   H.wires.clearLive();
   H.wires.clearGhost();
@@ -391,7 +416,9 @@ function toMenu() {
 function enterWire() {
   const w = H.session.wire;
   attempt = new RoutingAttempt(w.path, H.pos, H.nb);
+  endInsert();
   owner = null;
+  seatStart(w);
   H.wires.dimDone(true);
   H.wires.clearLive();
   H.wires.setGhost(w, polylines[w.id]);
@@ -403,6 +430,7 @@ function enterWire() {
 
 function enterQa() {
   attempt = null;
+  endInsert();
   owner = null;
   H.wires.dimDone(false);
   H.wires.clearGhost();
@@ -420,8 +448,9 @@ function updateGuides() {
   const target = w.path.at(-1);
   const ids = guided && attempt.next ? [...new Set([attempt.next, target])] : [target];
   const c = COLOURS[w.colour];
-  H.board.setHalos(ids, c === COLOURS.WH || c === COLOURS.BK ? 0x5ce1ff : c);
-  H.wires.setGhostVisible(guided);
+  H.board.setHalos(inserting ? [] : ids, c === COLOURS.WH || c === COLOURS.BK ? 0x5ce1ff : c);
+  H.wires.setGhostVisible(guided && !inserting);
+  if (inserting) H.face.setGuided(guided);
 }
 
 // Where the wire end is drawn (bundle-offset point), so it is grabbed exactly where it is seen.
@@ -464,7 +493,8 @@ function stepRope(p) {
   held.result = heldWire({
     start: H.board.local(grabPoint(), WIRE_Z),
     hand: held.hand,
-    remaining: Math.max(0.02, (wireLengthMm(w) - polyLen(polylines[w.id].slice(0, attempt.reached))) / 1000),
+    // while inserting, the end reaches up to the magnified view (handling length, not routed)
+    remaining: Math.max(inserting ? 0.35 : 0.02, (wireLengthMm(w) - polyLen(polylines[w.id].slice(0, attempt.reached))) / 1000),
     gravity: new THREE.Vector3(0, -9.81, 0).applyQuaternion(q),
     slack: SLACK, tail: TAIL_M, floorZ: 0.003, bounds: H.board.surfaceSize,
   });
@@ -478,7 +508,7 @@ function stepRope(p) {
 function updateLive() {
   const w = H.session.wire;
   const routed = polylines[w.id].slice(0, attempt.reached);
-  if (attempt.holding && held?.result) {
+  if ((attempt.holding || inserting?.attempt.holding) && held?.result) {
     H.wires.setLiveRope(w, routed, [...held.result.points, ...held.result.tail]);
     const e = held.result.end;
     H.wires.setHandle(w, null, true, new THREE.Vector3(e.x, e.y, e.z));
@@ -505,23 +535,112 @@ function handleEvents(events, p) {
       ui.statusKind = 'err';
     }
     if (e.type === 'done') {
-      sfx.done();
-      const w = H.session.wire;
-      H.wires.setDone(w, polylines[w.id]);
-      H.session.wireDone(attempt.errors, now());
-      if (H.session.state === 'qa') enterQa();
-      else enterWire();
+      const tg = insertTarget(H.harness, H.session.wire);
+      if (tg) { startInsert(tg, p); return; }
+      finishWire();
       return;
     }
     refresh();
   }
 }
 
+function finishWire() {
+  sfx.done();
+  const w = H.session.wire;
+  H.wires.setDone(w, polylines[w.id]);
+  H.session.wireDone(attempt.errors, now(), inserting?.attempt.errors ?? 0);
+  endInsert();
+  if (H.session.state === 'qa') enterQa();
+  else enterWire();
+}
+
+// The route is done and the target has several cavities: the wire stays in hand (VR) and the
+// magnified face view appears above the connector. Desktop: click the cavity.
+function startInsert(tg, p) {
+  const w = H.session.wire;
+  inserting = { tg, attempt: new InsertAttempt(cavityLayout(tg.numbers), tg.cavity) };
+  const guided = H.session.mode === 'guided' || now() < ui.ghostUntil;
+  H.face.show(tg.node, tg.numbers, tg.cavity, hexOf(w), guided, tg.node);
+  if (p && p !== pointers.mouse && p.enabled && p.work?.pressed) {
+    owner = p;
+    inserting.attempt.update(null, true, 999); // still held from routing
+  } else {
+    owner = null;
+  }
+  ui.status = `✓ ${tg.node}`; ui.statusKind = 'ok';
+  updateGuides();
+  refresh();
+}
+
+function handleInsertEvents(events, p) {
+  const { tg } = inserting;
+  for (const e of events) {
+    if (e.type === 'grab') { sfx.grab(); p?.pulse(0.3, 20); }
+    if (e.type === 'hover') H.face.hover(e.at);
+    if (e.type === 'wrong') {
+      sfx.wrong(); p?.pulse(1, 140);
+      H.face.wrong();
+      ui.status = H.session.mode === 'guided' ? t('cavityWrongGuided', { c: e.at, n: e.expected }) : t('cavityWrongTest', { c: e.at });
+      ui.statusKind = 'err';
+      refresh();
+    }
+    if (e.type === 'release') refresh();
+    if (e.type === 'inserted') {
+      sfx.snap(); p?.pulse(0.6, 40);
+      const w = H.session.wire;
+      H.board.seat(w.id, tg.node, tg.cavity, hexOf(w));
+      ui.status = t('cavityOk', { n: tg.node, c: tg.cavity }); ui.statusKind = 'ok';
+      owner = null;
+      finishWire();
+      return;
+    }
+  }
+}
+
+// One frame of inserting. Hands and controllers: pinch the wire end (at the view or at the
+// connector), push it through the face at a cavity. Mouse: a click on a cavity pushes it in.
+function stepInsert() {
+  const ins = inserting.attempt;
+  const mouse = pointers.mouse;
+  if (mouse.enabled && mouse.justPressed && !mouse.pressOnPanel) {
+    const hit = mouse.raycaster.intersectObject(H.face.group, true)[0];
+    const f = hit ? H.face.toFace(H.board.group.worldToLocal(hit.point.clone())) : null;
+    if (f) {
+      const events = [...ins.update(f.p, true, 10), ...ins.update(f.p, true, -20)];
+      handleInsertEvents(events.filter((e) => e.type === 'wrong' || e.type === 'inserted'), mouse);
+      if (inserting) ins.update(null, false, 0);
+      return;
+    }
+  }
+  if (!owner) {
+    const node = inserting.tg.node;
+    for (const p of pointers.list) {
+      if (p === mouse || !p.enabled || p.pressOnPanel || !pointers.pinchFresh(p)) continue;
+      const atView = H.face.near(p.work?.freeEnd);
+      const atConnector = p.work?.mm && distance(p.work.mm, H.pos[node]) < 40;
+      if (!atView && !atConnector) continue;
+      owner = p; p.pinchUsed = true; grabRope(p);
+      break;
+    }
+    if (!owner) return;
+  }
+  const p = owner;
+  if (p.enabled) p.lostAt = null; else p.lostAt ??= now();
+  const holding = p.enabled ? p.pinching || p.work.pressed : now() - p.lostAt < 300;
+  if (holding && held) stepRope(p);
+  const f = holding ? H.face.toFace(handLocal(p)) : null;
+  const events = ins.update(f?.p ?? null, holding, f?.depth ?? 999);
+  if (!ins.holding && !ins.done) owner = null;
+  handleInsertEvents(events, p);
+}
+
 function back() {
   const s = H.session;
   if (s.state !== 'qa' && !(s.state === 'route' && s.index > 0)) return;
+  if (s.state === 'route') H.board.unseat(`${s.wire.id}:from`);
   s.back(now());
   H.wires.removeDone(s.wire.id);
+  H.board.unseat(s.wire.id);
   enterWire();
 }
 
@@ -658,7 +777,11 @@ const views = {
     g.text(connLabel(w, 'from'), L + 90, 222, { size: 28, weight: 600, max: R - L - 90 });
     g.text(t('to'), L, 264, { size: 24, colour: '#9aa7b8' });
     g.text(connLabel(w, 'to'), L + 90, 264, { size: 28, weight: 600, max: R - L - 90 });
-    const instr = attempt?.holding
+    const tg = inserting?.tg;
+    const instr = tg
+      ? (!inserting.attempt.holding ? t('insertGrab', { n: tg.node })
+        : s.mode === 'guided' ? t('insertGuided', { c: tg.cavity, n: tg.node }) : t('insertTest', { n: tg.node }))
+      : attempt?.holding
       ? (s.mode === 'guided' ? t('pullTo', { p: attempt.next }) : t('pullAlong'))
       : attempt?.reached > 1
         ? t('grabContinue', { p: attempt.end })
@@ -666,7 +789,7 @@ const views = {
     g.para(instr, L, 322, R - L, { size: 28 });
     if (ui.status) g.text(ui.status, L, 420, { size: 30, weight: 700, colour: ui.statusKind === 'err' ? '#ff6b6b' : '#3ddc84' });
     const m = s.metrics[i];
-    g.text(t('stats', { e: attempt?.errors ?? 0, h: m.hints, t: fmt((now() - m.start) / 1000) }), L, 478, { size: 28, colour: '#c5ceda' });
+    g.text(t('stats', { e: (attempt?.errors ?? 0) + (inserting?.attempt.errors ?? 0), h: m.hints, t: fmt((now() - m.start) / 1000) }), L, 478, { size: 28, colour: '#c5ceda' });
     g.text(t('peg', { a: attempt ? attempt.reached : 0, b: w.path.length }), R, 478, { size: 28, colour: '#c5ceda', align: 'right' });
     g.bar(L, 510, R - L, 14, attempt ? (attempt.reached - 1) / (w.path.length - 1) : 0, `#${(COLOURS[w.colour] ?? 0x5ce1ff).toString(16).padStart(6, '0')}`);
     g.bar(L, 540, R - L, 8, i / n);
@@ -688,7 +811,9 @@ const views = {
     const s = H.session.summary();
     header(g, t('doneKicker'), `${term(s.variant)} · ${t(s.mode)}`);
     g.text(t('total', { t: fmt(s.total_s) }), L, 196, { size: 36, weight: 700 });
-    g.text(t('errorsN', { n: s.errors }), L + 330, 196, { size: 36, weight: 700, colour: s.errors ? '#ff6b6b' : '#3ddc84' });
+    const errs = s.errors + s.cavity_errors;
+    g.text(t('errorsN', { n: errs }), L + 330, 196, { size: 36, weight: 700, colour: errs ? '#ff6b6b' : '#3ddc84' });
+    if (s.cavity_errors) g.text(t('cavityErrN', { n: s.cavity_errors }), L + 330, 232, { size: 22, colour: '#ffb3b3' });
     g.text(t('hintsN', { n: s.hints }), L + 610, 196, { size: 36, weight: 700, colour: '#c5ceda' });
     const cols = s.wires.length > 12 ? 3 : 2, per = Math.ceil(s.wires.length / cols), colW = (R - L) / cols;
     const rowH = Math.min(54, 330 / per);
@@ -696,7 +821,8 @@ const views = {
       const x = L + Math.floor(i / per) * colW, y = 256 + (i % per) * rowH;
       const wire = H.session.wires.find((x) => x.id === w.wire);
       g.swatch(x + 14, y - 9, COLOURS[wire.colour] ?? 0xcccccc, 11);
-      g.text(`${w.wire}  ${w.time_s.toFixed(1)} s  ${t('errShort', { n: w.errors })}`, x + 36, y, { size: Math.min(26, rowH * 0.62), colour: w.errors ? '#ffb3b3' : '#e9eef5', max: colW - 44 });
+      const e = w.errors + w.cavity_errors;
+      g.text(`${w.wire}  ${w.time_s.toFixed(1)} s  ${t('errShort', { n: e })}`, x + 36, y, { size: Math.min(26, rowH * 0.62), colour: e ? '#ffb3b3' : '#e9eef5', max: colW - 44 });
     });
     g.button('download', t('download'), L, 620, 290, 76);
     if (xrMode === 'mr') g.button('place', t('placeBoard'), L + 311, 620, 290, 76);
@@ -816,7 +942,9 @@ function frame() {
   loco.update(dt, pointers.list);
 
   if (!ui.setup && H.session?.state === 'route' && attempt) {
-    if (!owner) {
+    if (inserting) {
+      stepInsert();
+    } else if (!owner) {
       for (const p of pointers.list) {
         if (!p.enabled || !p.work?.canGrab || p.pressOnPanel) continue;
         handleEvents(attempt.update(p.work.mm, true, p.work.grab, grabPoint()), p);
@@ -843,6 +971,7 @@ function frame() {
 
   H.board?.update(dt, t);
   H.wires?.update(dt, t);
+  H.face?.update(dt, t);
   vehicle?.update(t);
   renderer.render(scene, camera);
 }
@@ -952,5 +1081,5 @@ window.addEventListener('resize', () => {
 });
 
 // Debug handle. step() renders one frame by hand, for scripted tests when the page gets no animation frames.
-window.formboard = { H, panel, carPanel, camera, step: frame, load: loadHarness, setView, setMode, placement, station, ui, beginSetup, confirmSetup,
+window.formboard = { H, panel, carPanel, camera, controls, pointers, button: onButton, step: frame, get inserting() { return inserting; }, get attempt() { return attempt; }, load: loadHarness, setView, setMode, placement, station, ui, beginSetup, confirmSetup,
   handles: { near: handleNear, start: startMove, drag: dragTo, end: endMove, get board() { return boardHandle; }, get car() { return carHandle; }, get boardTurn() { return boardTurn; }, get carTurn() { return carTurn; }, get mrCar() { return mrCar; } } };

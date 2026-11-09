@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { boardSizeMm, colName } from '../core/grid.js';
 import { nodePositions } from '../core/harness.js';
+import { cavityLayout } from '../core/cavity.js';
 import { t, term } from '../i18n.js';
 
 const MARGIN_MM = 45;
@@ -20,6 +21,7 @@ export class Board {
     this.pegs = {};
     this.halos = {};
     this.flashes = [];
+    this.seats = {}; // wire id -> mesh of its end seated in a cavity
     this.metal = metal;
 
     this.buildSurface();
@@ -175,7 +177,7 @@ export class Board {
   buildConnectors() {
     this.connectors = {};
     for (const n of this.h.nodes.filter((x) => x.kind === 'connector')) {
-      const grp = connectorModel(n, this.dense, this.metal);
+      const { grp, cavities } = connectorModel(n, this.dense, this.metal);
       grp.position.copy(this.local(this.pos[n.id]));
       grp.rotation.z = this.segmentAngle(n.id) + Math.PI; // front away from the wires
       grp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
@@ -184,7 +186,7 @@ export class Board {
       label.position.copy(this.local(this.pos[n.id], 0.045));
       label.position.y += this.dense ? 0.022 : 0.035;
       this.group.add(label);
-      this.connectors[n.id] = { grp };
+      this.connectors[n.id] = { grp, cavities };
     }
   }
 
@@ -237,6 +239,30 @@ export class Board {
     const seg = this.h.segments.find(([a, b]) => a === id || b === id);
     const other = seg[0] === id ? seg[1] : seg[0];
     return Math.atan2(this.pos[other].y - this.pos[id].y, this.pos[other].x - this.pos[id].x);
+  }
+
+  // A wire end seated in its cavity: the terminal shows in the hole, in the wire's colour.
+  seat(wireId, nodeId, cavity, colour) {
+    this.unseat(wireId);
+    const c = this.connectors[nodeId];
+    const at = c?.cavities?.[String(cavity)];
+    if (!at) return;
+    const m = new THREE.Mesh(SEAT, new THREE.MeshStandardMaterial({ color: colour, roughness: 0.45, emissive: colour, emissiveIntensity: 0.25 }));
+    m.position.copy(at);
+    c.grp.add(m);
+    this.seats[wireId] = m;
+  }
+
+  unseat(wireId) {
+    const m = this.seats[wireId];
+    if (!m) return;
+    m.removeFromParent();
+    m.material.dispose();
+    delete this.seats[wireId];
+  }
+
+  clearSeats() {
+    for (const id of Object.keys(this.seats)) this.unseat(id);
   }
 
   setPeg(id, state) {
@@ -293,6 +319,7 @@ export class Board {
 }
 
 const WASHER = new THREE.CylinderGeometry(0.009, 0.009, 0.002, 20).rotateX(Math.PI / 2);
+const SEAT = new THREE.BoxGeometry(0.0016, 0.0022, 0.0022);
 
 function woodGrain(g, w, h, base = '#c49a6c') {
   g.fillStyle = base;
@@ -311,8 +338,10 @@ function woodGrain(g, w, h, base = '#c49a6c') {
 const HOUSING = { BK: 0x1d1f22, WH: 0xe8e8e2, GY: 0x8d9298, BN: 0x6b4428, BU: 0x2a5aa8, GN: 0x2f7d45, RD: 0xa52a2a, YE: 0xd9b52a, NT: 0xe2d6b8, VT: 0x6d3e91 };
 
 // One connector, in its own frame: wires enter at the origin from -x, the front faces +x.
+// Returns the group and, for housings, where each cavity opens on the front ({ number: Vector3 }).
 function connectorModel(n, dense, metal) {
   const grp = new THREE.Group();
+  const out = { grp, cavities: null };
   const k = dense ? 1 : 1.5;
   const plastic = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55 });
   if (n.shape === 'ring') {
@@ -321,13 +350,13 @@ function connectorModel(n, dense, metal) {
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.01, 12).rotateZ(Math.PI / 2), lug.material);
     barrel.position.set(0.005, 0, 0.004);
     grp.add(lug, barrel);
-    return grp;
+    return out;
   }
   if (n.shape === 'splice') {
     const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.022, 16).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.35 }));
     sleeve.position.set(0.006, 0, 0.012);
     grp.add(sleeve);
-    return grp;
+    return out;
   }
   if (n.shape === 'boot') {
     const rubber = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.85 });
@@ -336,23 +365,27 @@ function connectorModel(n, dense, metal) {
     const mouth = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0075, 0.006, 20).rotateZ(Math.PI / 2), rubber);
     mouth.position.set(0.032, 0, 0.012);
     grp.add(boot, mouth);
-    return grp;
+    return out;
   }
-  // housing: width from the cavity count, cavities on the front, latch on top, metal holder below
-  const cav = n.cavities ?? 2, rows = cav > 6 ? 2 : 1, perRow = Math.ceil(cav / rows);
-  const wy = Math.max(0.012, perRow * 0.0045 + 0.005) * k, hz = (rows === 2 ? 0.016 : 0.012) * k, dx = 0.022 * k;
+  // housing: size from the cavity layout (core/cavity.js, as in the magnified face view), cavities
+  // on the front, latch on top, metal holder below. Seen from the front, face x is the housing's +y, face y is up (+z).
+  const numbers = n.cavity_numbers ?? Array.from({ length: n.cavities ?? 2 }, (_, i) => String(i + 1));
+  const layout = cavityLayout(numbers, 4.5 * k);
+  const wy = Math.max(0.012, layout.w / 1000), hz = Math.max(0.012 * k, layout.h / 1000), dx = 0.022 * k;
   const body = new THREE.Mesh(new THREE.BoxGeometry(dx, wy, hz), plastic(HOUSING[n.housing_colour] ?? HOUSING.BK));
   body.position.set(dx / 2, 0, hz / 2 + 0.004);
   grp.add(body);
   const hole = new THREE.BoxGeometry(0.001, 0.0024 * k, 0.0024 * k);
   const holeMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
-  const holes = new THREE.InstancedMesh(hole, holeMat, cav);
+  const holes = new THREE.InstancedMesh(hole, holeMat, numbers.length);
   const m = new THREE.Matrix4();
-  for (let i = 0; i < cav; i++) {
-    const r = Math.floor(i / perRow), j = i % perRow;
-    m.makeTranslation(dx + 0.0003, (j - (perRow - 1) / 2) * 0.0045 * k, 0.004 + hz / 2 + (rows === 2 ? (r - 0.5) * 0.006 * k : 0));
+  out.cavities = {};
+  layout.cavities.forEach((c, i) => {
+    const at = new THREE.Vector3(dx + 0.0003, c.x / 1000, 0.004 + hz / 2 + c.y / 1000);
+    m.makeTranslation(at.x, at.y, at.z);
     holes.setMatrixAt(i, m);
-  }
+    out.cavities[c.n] = at;
+  });
   grp.add(holes);
   const latch = new THREE.Mesh(new THREE.BoxGeometry(dx * 0.45, wy * 0.35, 0.002 * k), body.material);
   latch.position.set(dx * 0.6, 0, hz + 0.005);
@@ -360,7 +393,7 @@ function connectorModel(n, dense, metal) {
   const holder = new THREE.Mesh(new THREE.BoxGeometry(dx * 1.1, wy + 0.006, 0.004), metal);
   holder.position.set(dx / 2, 0, 0.002);
   grp.add(holder);
-  return grp;
+  return out;
 }
 
 function makeLabel(text, width = 0.16) {
