@@ -98,7 +98,7 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hol
         # a 5th field False: a normal caption box instead of a darkened title card
         # an end of None: stays fully visible to the last frame (no fade-out)
         caps.append({'s': c[0] if c[0] >= 0 else total + c[0], 'e': total + 1 if c[1] is None else c[1] if c[1] > 0 else total + c[1], 't': c[2], 'd': c[3],
-                     'card': c[4] if len(c) > 4 else True, 'fixed': True})
+                     'card': c[4] if len(c) > 4 else True, 'fixed': True, 'f': c[5] if len(c) > 5 else 0.35})
     # keep normal captions out of title cards
     for c in caps:
         if c.get('fixed'): continue
@@ -120,7 +120,7 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hol
         # over the darkened title and end cards: the transparent FAU logo in white (dark blue is unreadable there)
         dark = [{**LOGOS[0], 'img': f'{WORK}/fau_white.png'}, LOGOS[1]]
         for k in [c for c in caps if c.get('card')]:
-            caps += [{'s': k['s'], 'e': k['e'], 't': '', **l} for l in dark]
+            caps += [{'s': k['s'], 'e': k['e'], 't': '', 'f': k['f'], **l} for l in dark]
     else:
         caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l} for l in LOGOS]
     jf = f'{WORK}/{name}.json'
@@ -136,15 +136,16 @@ if 'finish' in which: build('mr-finished', FINISH, 3000)
 # Full edits: teaser, harness choice, pegs, wiring, finish; the car view starts with the turn from the board.
 # The ending: the sign above the car (2:51.5-2:54.4) at half speed, about 2 s clear, then under the end card.
 # Suavi: no zoom in the full edits, so the wiring shots are uncropped here and the stabiliser zooms only 5 %.
-# The sign scene plays at 80 % speed and eases out (60 %, 45 %); the end card comes over it and the last frame (2:54.35) is then held
+# The sign scene plays at 80 % speed and eases out (60 %, 40 %) onto 2:54.1; the end card fades in (0.9 s) and that frame is then held
 # still for 3 s (vtool caption hold), card fully visible to the end (Suavi: no choppy slow motion, no fade-out).
 HOLD = 3.0
 FULL = [(a, b, None) + tuple(x) for a, b, _, *x in TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1]] + \
-       [(165.7, 170.5, None, 'incar'), (170.5, 173.5, None, None, 0.8, True),
-        (173.5, 173.9, None, None, 0.6, True), (173.9, 174.35, None, None, 0.45)]  # ease out into the held frame  # 2:44-2:45.6 is a whip pan (1100 px/s): dissolve instead
+       [(165.7, 170.5, None, 'incar', 1, True),       # one continuous take into the sign: no cross-fade (no double image)
+        (170.5, 173.3, None, None, 0.8, True), (173.3, 173.75, None, None, 0.6, True),
+        (173.75, 174.12, None, None, 0.4)]             # eases out and stops on 2:54.1, the sign close and centred  # 2:44-2:45.6 is a whip pan (1100 px/s): dissolve instead
 CARDS = [
     (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
-    (-2.0, None, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
+    (-2.2, None, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr', True, 0.9),
 ]
 if 'full' in which:
     build('formboard-xr-mr-full', FULL, 4000, cards=CARDS, zoom='1.05', hold=HOLD)

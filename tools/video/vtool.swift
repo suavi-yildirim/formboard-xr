@@ -335,13 +335,13 @@ case "caption":
   // JSON: [{"s": start, "e": end, "t": "title", "d": "second line", "card": false}], times in seconds of <in>.
   // A logo entry: {"s", "e", "t": "", "img": "file.png", "pos": "tl" | "tr", "h": height in 1280-wide px,
   // "badge": true for a white rounded plate behind it}.
-  // "style": "chip" (pill at the top centre, e.g. a step name), "stamp" (pill that pops in below it; "colour":
+  // "f": fade time in seconds (default 0.35). "style": "chip" (pill at the top centre, e.g. a step name), "stamp" (pill that pops in below it; "colour":
   // "ok" | "err"), "bar" (progress line along the bottom from s to e, with "marks" as fractions for chapters).
   // Normal captions are a dark box at the bottom left with a cyan bar; "card": true dims the frame and
   // centres the text (title cards). Each fades in and out over 0.35 s.
   struct Cap: Decodable { let s: Double; let e: Double; let t: String; let d: String?; let card: Bool?
                           let img: String?; let pos: String?; let h: Double?; let badge: Bool?
-                          let style: String?; let colour: String?; let marks: [Double]? }
+                          let style: String?; let colour: String?; let marks: [Double]?; let f: Double? }
   var images: [String: CGImage] = [:]
   func image(_ path: String) -> CGImage {
     if let i = images[path] { return i }
@@ -479,7 +479,7 @@ case "caption":
           let ctx = CGContext(data: CVPixelBufferGetBaseAddress(px), width: CVPixelBufferGetWidth(px), height: CVPixelBufferGetHeight(px),
                               bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(px), space: CGColorSpaceCreateDeviceRGB(),
                               bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
-          for c in active { let f = c.style == "stamp" ? 0.15 : 0.35; draw(ctx, c, CGFloat(min(1, (t - c.s) / f, (c.e - t) / f)), t) }
+          for c in active { let f = c.f ?? (c.style == "stamp" ? 0.15 : 0.35); draw(ctx, c, CGFloat(min(1, (t - c.s) / f, (c.e - t) / f)), t) }
           CVPixelBufferUnlockBaseAddress(px, [])
         }
       }
