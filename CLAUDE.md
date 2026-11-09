@@ -131,6 +131,9 @@ Live: https://suavi-yildirim.github.io/formboard-xr/ · demo: `/demo/` (EN, `#de
   chime (find them with `vtool levels <raw> 0.05`); no speed-ups. FAU (dark blue PNG, no plate; 84 px at 720p) top left and FAPS
   (green) top right during the first 4.5 s, from `FAPS_und_FAU_Logos/_Archiv` (folder gitignored; the EMF files
   can't be converted on this Mac). The full MR edit (`quest3-videos/formboard-xr-mr-full.mp4`, 1:15, ends on the car sign under a darkened end card) and a creative cut (`formboard-xr-mr-creative.mp4`: step chips, progress bar, pop-ups; `mr_clips.py creative`) stay local.
+  Sharpness (Suavi): montage and stabiliser run at 1920x1080 and 40 Mbit/s, the captioned master at 16 Mbit/s
+  (`mr-work/*_master.mp4`, `quest3-videos/formboard-xr-mr-*.mp4`); page versions are 1080p at 30 fps (`encode ... 30`):
+  clips 4.5 Mbit/s, the XR film 5 Mbit/s (stays under GitHub's 50 MB warning). Compare with `vtool frame <v> x.png <s> full`.
   All clips are stabilised (`vtool stabilize`, 0.7 s window, 10 % zoom; it prints the shake and the fastest moments).
   On the darkened title and end cards the FAU logo is the white transparent PNG; the end card stays over the car sign,
   which plays at 80 % speed and eases out (60 %, 40 %) onto 2:54.1 (`*0.8` on a range; `!` joins continuous

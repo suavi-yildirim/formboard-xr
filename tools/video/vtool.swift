@@ -4,7 +4,7 @@
 //   vtool sheet <in> <out.jpg> <start> <end> <count> [cols]       contact sheet with timestamps
 //   vtool motion <in> <start> <end> <step>                        camera motion per step (pick calm takes)
 //   vtool cut <in> <out.mp4> <ranges "s-e,s-e"> [preset]          join ranges, Apple preset (large files)
-//   vtool encode <in> <out.mp4> <ranges> <w> <h> <kbps>           join ranges, H.264 + AAC at a set bitrate
+//   vtool encode <in> <out.mp4> <ranges> <w> <h> <kbps> [fps]     join ranges, H.264 + AAC at a set bitrate (fps: drop to it)
 //   vtool montage <in> <out.mp4> <ranges> <fade> <w> <h> <kbps>   like encode, with cross-fades (video + audio);
 //                                                                  a range "s-e@x:y:w" also crops it to the 16:9 box
 //                                                                  at source pixel x, y (top left) with width w;
@@ -15,7 +15,7 @@
 //   vtool stabilize <in> <out.mp4> <kbps> [window s] [zoom]       smooth the camera path (see the stabilize case)
 //   vtool levels <in> <step>                                      audio loudness per step (look for voices)
 //   vtool gif <in> <out.gif> <width> <fps> [start] [end]          looping GIF (for the README)
-//   vtool frame <in> <out.jpg> <sec>                              poster image
+//   vtool frame <in> <out.jpg|.png> <sec> [full]                  poster image (full: video size)
 import AVFoundation
 import AppKit
 import CoreImage
@@ -115,6 +115,7 @@ case "encode":
     return CMTimeRange(start: CMTime(seconds: se[0], preferredTimescale: 600), end: CMTime(seconds: se[1], preferredTimescale: 600))
   }
   let w = Int(args[5])!, h = Int(args[6])!, kbps = Int(args[7])!
+  let fpsOut = args.count > 8 ? Double(args[8])! : 0 // 0: keep every frame
   let comp = AVMutableComposition()
   var hasAudio = false
   for type in [AVMediaType.video, .audio] {
@@ -157,7 +158,20 @@ case "encode":
       }
     }
   }
-  pump(vIn, vOut, "v")
+  if fpsOut > 0 {
+    // keep one frame per 1/fps slot (60 -> 30 fps keeps every second frame)
+    var next = 0.0
+    group.enter()
+    vIn.requestMediaDataWhenReady(on: DispatchQueue(label: "v")) {
+      while vIn.isReadyForMoreMediaData {
+        guard let b = vOut.copyNextSampleBuffer() else { vIn.markAsFinished(); group.leave(); return }
+        let t = CMSampleBufferGetPresentationTimeStamp(b).seconds
+        if t + 0.002 >= next { vIn.append(b); next += 1 / fpsOut; while next <= t { next += 1 / fpsOut } }
+      }
+    }
+  } else {
+    pump(vIn, vOut, "v")
+  }
   if let i = aIn, let o = aOut { pump(i, o, "a") }
   group.wait()
   let sem = DispatchSemaphore(value: 0)
@@ -586,10 +600,9 @@ case "stabilize":
       guard let b = vOut.copyNextSampleBuffer(), let src = CMSampleBufferGetImageBuffer(b) else { vIn.markAsFinished(); group.leave(); return }
       let i = min(k, n - 1); k += 1
       let cx = max(-mx, min(mx, (sx[i] - px[i]) * sgnX)), cy = max(-my, min(my, (sy[i] - py[i]) * sgnY))
-      var img = CIImage(cvPixelBuffer: src)
-      let t = CGAffineTransform(translationX: size.width / 2, y: size.height / 2).scaledBy(x: zoom, y: zoom)
-        .translatedBy(x: -size.width / 2 + CGFloat(cx) / zoom, y: -size.height / 2 + CGFloat(cy) / zoom)
-      img = img.transformed(by: t)
+      // Lanczos for the zoom (sharper than the default sampling), then the sub-pixel shift
+      var img = CIImage(cvPixelBuffer: src).applyingFilter("CILanczosScaleTransform", parameters: [kCIInputScaleKey: zoom, kCIInputAspectRatioKey: 1])
+      img = img.transformed(by: CGAffineTransform(translationX: -size.width * (zoom - 1) / 2 + CGFloat(cx), y: -size.height * (zoom - 1) / 2 + CGFloat(cy)))
       var dst: CVPixelBuffer?
       CVPixelBufferPoolCreatePixelBuffer(nil, adaptor.pixelBufferPool!, &dst)
       ci.render(img, to: dst!, bounds: CGRect(origin: .zero, size: size), colorSpace: CGColorSpaceCreateDeviceRGB())
@@ -667,10 +680,14 @@ case "frame":
   // frame <in> <out.jpg> <sec>: one full-size still (poster image)
   let gen = AVAssetImageGenerator(asset: asset)
   gen.appliesPreferredTrackTransform = true
-  gen.maximumSize = CGSize(width: 1280, height: 720)
+  // posters: at most 1280 x 720; "full" as 5th argument keeps the video size (for sharpness checks; .png = lossless)
+  let full = args.count > 5 && args[5] == "full"
+  gen.maximumSize = full ? .zero : CGSize(width: 1280, height: 720)
+  gen.requestedTimeToleranceBefore = .zero; gen.requestedTimeToleranceAfter = .zero
   let img = try! gen.copyCGImage(at: CMTime(seconds: Double(args[4])!, preferredTimescale: 600), actualTime: nil)
   let rep = NSBitmapImageRep(cgImage: img)
-  try! rep.representation(using: .jpeg, properties: [.compressionFactor: 0.8])!.write(to: URL(fileURLWithPath: args[3]))
+  let png = args[3].lowercased().hasSuffix(".png")
+  try! rep.representation(using: png ? .png : .jpeg, properties: png ? [:] : [.compressionFactor: 0.8])!.write(to: URL(fileURLWithPath: args[3]))
   print("wrote \(args[3])")
 
 default:

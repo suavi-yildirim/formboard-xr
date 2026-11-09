@@ -58,6 +58,11 @@ LOGOS = [  # FAU (dark blue PNG, transparent) top left, FAPS (green) top right, 
 ]
 LOGO_S = 4.5
 
+# page versions: 1080p at 30 fps (name of the master -> file in demo/media, kbit/s); the XR film is the creative cut
+PAGE = {'mr-pegs': ('mr-pegs', 4500), 'mr-wiring': ('mr-wiring', 4500), 'mr-finished': ('mr-finished', 4500),
+        'formboard-xr-mr-creative': ('mr-full', 5000)}  # 5 Mbit/s keeps it under GitHub's 50 MB warning
+
+
 def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hold=0):
     """chapters: {caption key: (step number, 'Name')} for step chips and a progress bar (creative cut).
     stamps: [(raw time, text, 'ok' | 'err')] pop up at that moment of the recording."""
@@ -67,10 +72,11 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hol
                       for s, e, c, _, v, j in segs)
     os.makedirs(WORK, exist_ok=True)
     raw = f'{WORK}/{name}_raw.mp4'
-    subprocess.run([VT, 'montage', IN, raw, ranges, str(FADE), '1280', '720', '9000'], check=True)
+    # full resolution and a very high bitrate in the intermediate steps: only the last encode should cost sharpness
+    subprocess.run([VT, 'montage', IN, raw, ranges, str(FADE), '1920', '1080', '40000'], check=True)
     # smooth the head movement (camera path averaged over 0.7 s, 10 % zoom as margin), before the captions go on
     stab = f'{WORK}/{name}_stab.mp4'
-    r = subprocess.run([VT, 'stabilize', raw, stab, '9000', '0.7', zoom], check=True, capture_output=True, text=True)
+    r = subprocess.run([VT, 'stabilize', raw, stab, '40000', '0.7', zoom], check=True, capture_output=True, text=True)
     print(name, r.stdout.strip().splitlines()[0])
     raw = stab
     caps, t = [], 0.0
@@ -125,8 +131,14 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=(), zoom='1.05', hol
         caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l} for l in LOGOS]
     jf = f'{WORK}/{name}.json'
     json.dump(caps, open(jf, 'w'), ensure_ascii=False, indent=1)
-    out = f"{OUTDIR['full'] if name.startswith('formboard-xr') else ROOT + '/demo/media'}/{name}.mp4"
-    subprocess.run([VT, 'caption', raw, out, jf, str(kbps), str(hold)], check=True)
+    # the captioned 1080p60 master (16 Mbit/s); page versions are encoded from it (see PAGE)
+    out = f"{OUTDIR['full'] if name.startswith('formboard-xr') else WORK}/{name}{'' if name.startswith('formboard-xr') else '_master'}.mp4"
+    subprocess.run([VT, 'caption', raw, out, jf, '16000', str(hold)], check=True)
+    if name in PAGE:
+        dest, kb = PAGE[name]
+        d = float(subprocess.run([VT, 'probe', out], capture_output=True, text=True).stdout.split()[1])
+        subprocess.run([VT, 'encode', out, f'{ROOT}/demo/media/{dest}.mp4', f'0-{d}', '1920', '1080', str(kb), '30'], check=True)
+        subprocess.run([VT, 'frame', f'{ROOT}/demo/media/{dest}.mp4', f'{ROOT}/demo/media/{dest}.jpg', '1.8' if dest == 'mr-full' else '6.0'], check=True)
     print(name, round(total, 1), 's')
 
 which = sys.argv[1:] or ['pegs', 'wiring', 'finish', 'full']
