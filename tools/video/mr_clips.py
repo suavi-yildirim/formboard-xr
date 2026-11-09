@@ -19,7 +19,7 @@ CROP = '600:150:1320'  # right part: keeps the board, drops the wall and the pos
 
 # segment: (start, end, crop or None, caption key or None)
 CAP = {
-  'table': ('Mixed reality: the formboard on your real table', 'Mixed Reality: das Formbrett auf dem echten Tisch'),
+  'table': ('Mixed reality: the formboard placed in the real room', 'Mixed Reality: das Formbrett im echten Raum platziert'),
   'car':   ('The VW vehicle harness at 1:1 in the room', 'Der VW-Fahrzeugleitungssatz 1:1 im Raum'),
   'menu':  ('Choose a real KBL harness', 'Einen echten KBL-Leitungssatz wählen'),
   'pegs':  ('Pinch the guide pegs into place', 'Führungsstifte mit den Fingern setzen'),
@@ -36,11 +36,15 @@ CAP = {
 }
 # Every part is one whole action: it starts about 0.7 s before the grab sound and ends about 0.8 s after the
 # "wire done" chime (found with `vtool levels <raw> 0.05`). 2:20-2:23 (a failed grab) is left out.
+TEASER = [(177.2, 181.0, None, None)]         # the finished board, as a sneak peek under the title card
+SETUP = [(2.9, 4.6, None, 'table'),            # the board placed in the room
+         (17.2, 21.0, None, 'car'),            # the vehicle harness at 1:1 on the floor
+         (26.0, 31.3, None, 'menu')]           # choosing the harness (clicks 28.8, 30.7)
 PEGS = [(39.6, 44.4, CROP, 'pegs'),            # guide pegs set one by one
         (48.2, 55.6, CROP, 'route'),           # wire 1: grab 48.9, done 54.8
         (55.9, 62.2, CROP, 'snap')]            # wire 2: grab 56.6, done 61.4
-WIRING = [(64.2, 70.2, CROP, 'grow'),          # wire 3: grab 64.9, done 69.4
-          (71.9, 77.8, CROP, 'wrong'),         # wire 4: grab 72.6, wrong peg 75.8, done 77.0
+WIRING = [(64.2, 69.8, CROP, 'grow'),          # wire 3: grab 64.9, done 69.4 (the hand hovers and shakes after it)
+          (116.9, 120.3, CROP, 'wrong'),       # a later wire: grab 117.6, wrong peg 119.2, done 119.7 (calm)
           (78.2, 83.8, CROP, 'dense'),         # wire 5: grab 78.9, done 83.0
           (94.5, 99.5, CROP, 'bundle')]        # wire 6: grab 95.2, done 98.7
 FINISH = [(150.8, 160.8, CROP, 'last'),        # the last five wires, grab 151.5 ... done 160.0
@@ -63,8 +67,9 @@ def build(name, segs, kbps, cards=()):
     for i, (s, e, c, key) in enumerate(segs):
         d = e - s
         start, end = t + (0.15 if i else 0.3), t + d - FADE - 0.05
-        if key and (not caps or caps[-1]['t'] != CAP[key][0]):
-            caps.append({'s': start, 'e': end, 't': CAP[key][0], 'd': CAP[key][1]})
+        # German on top (large), English below
+        if key and (not caps or caps[-1]['t'] != CAP[key][1]):
+            caps.append({'s': start, 'e': end, 't': CAP[key][1], 'd': CAP[key][0]})
         elif key:
             caps[-1]['e'] = end  # same caption over consecutive segments
         t += d - FADE
@@ -79,7 +84,8 @@ def build(name, segs, kbps, cards=()):
                 if k['s'] <= c['s']: c['s'] = k['e'] + 0.2
                 else: c['e'] = k['s'] - 0.2
     caps = [c for c in caps if c['e'] - c['s'] > 1.0]
-    caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l} for l in LOGOS]
+    # over a darkened title card the dark blue FAU logo needs a white plate
+    caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l, 'badge': bool(cards) and l['pos'] == 'tl'} for l in LOGOS]
     if cards:  # the end card shows the logos again
         # on the darkened end card the dark blue FAU logo needs a white plate
         caps += [{'s': total - 3.2, 'e': total - 0.05, 't': '', **l, 'badge': l['pos'] == 'tl'} for l in LOGOS]
@@ -90,11 +96,11 @@ def build(name, segs, kbps, cards=()):
     print(name, round(total, 1), 's')
 
 which = sys.argv[1:] or ['pegs', 'wiring', 'finish', 'full']
-if 'pegs' in which: build('mr-pegs', PEGS, 3000)
+if 'pegs' in which: build('mr-pegs', SETUP[2:] + PEGS, 3000)
 if 'wiring' in which: build('mr-wiring', WIRING, 3000)
 if 'finish' in which: build('mr-finished', FINISH, 3000)
 if 'full' in which:
-    build('formboard-xr-mr-full', PEGS + WIRING + FINISH, 4000, cards=[
-        (0.0, 2.3, 'Formboard XR · mixed reality', 'Wire harness training on a real table, from VW KBL data'),
-        (-3.2, -0.05, 'Runs in the headset’s browser, no install', 'suavi-yildirim.github.io/formboard-xr'),
+    build('formboard-xr-mr-full', TEASER + SETUP + PEGS + WIRING + FINISH, 4000, cards=[
+        (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
+        (-3.2, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
     ])
