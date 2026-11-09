@@ -7,14 +7,17 @@
 //   vtool encode <in> <out.mp4> <ranges> <w> <h> <kbps>           join ranges, H.264 + AAC at a set bitrate
 //   vtool montage <in> <out.mp4> <ranges> <fade> <w> <h> <kbps>   like encode, with cross-fades (video + audio);
 //                                                                  a range "s-e@x:y:w" also crops it to the 16:9 box
-//                                                                  at source pixel x, y (top left) with width w
+//                                                                  at source pixel x, y (top left) with width w;
+//                                                                  a trailing "*0.5" plays the range at half speed
 //   vtool caption <in> <out.mp4> <captions.json> <kbps>           burn in captions (see the caption case)
+//   vtool stabilize <in> <out.mp4> <kbps> [window s] [zoom]       smooth the camera path (see the stabilize case)
 //   vtool levels <in> <step>                                      audio loudness per step (look for voices)
 //   vtool gif <in> <out.gif> <width> <fps> [start] [end]          looping GIF (for the README)
 //   vtool frame <in> <out.jpg> <sec>                              poster image
 import AVFoundation
 import AppKit
 import CoreImage
+import Vision
 
 func fail(_ s: String) -> Never { FileHandle.standardError.write((s + "\n").data(using: .utf8)!); exit(1) }
 
@@ -202,7 +205,11 @@ case "montage":
   let srcA = load { try await asset.loadTracks(withMediaType: .audio) }.first
   let natural = load { try await srcV.load(.naturalSize) }
   var crops: [CGAffineTransform] = []
-  let ranges = args[4].split(separator: ",").map { item -> CMTimeRange in
+  var speeds: [Double] = []
+  let ranges = args[4].split(separator: ",").map { whole -> CMTimeRange in
+    let sp = whole.split(separator: "*")
+    speeds.append(sp.count > 1 ? Double(sp[1])! : 1)
+    let item = sp[0]
     let parts = item.split(separator: "@")
     let se = parts[0].split(separator: "-").map { Double($0)! }
     var t = CGAffineTransform.identity
@@ -227,8 +234,13 @@ case "montage":
     let lane = i % lanes
     try! vT[lane].insertTimeRange(r, of: srcV, at: cursor)
     if let a = srcA { try! aT[lane].insertTimeRange(r, of: a, at: cursor) }
-    segs.append((cursor, cursor + r.duration, lane))
-    cursor = cursor + r.duration - (i < ranges.count - 1 ? fade : .zero)
+    let dur = CMTime(seconds: r.duration.seconds / speeds[i], preferredTimescale: 600)
+    if speeds[i] != 1 {
+      vT[lane].scaleTimeRange(CMTimeRange(start: cursor, duration: r.duration), toDuration: dur)
+      if srcA != nil { aT[lane].scaleTimeRange(CMTimeRange(start: cursor, duration: r.duration), toDuration: dur) }
+    }
+    segs.append((cursor, cursor + dur, lane))
+    cursor = cursor + dur - (i < ranges.count - 1 ? fade : .zero)
   }
   let total = segs.last!.end
   let vc = AVMutableVideoComposition()
@@ -464,6 +476,115 @@ case "caption":
   if writer.status != .completed { fail("caption failed: \(String(describing: writer.error ?? reader.error))") }
   let cbytes = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int) ?? 0
   print(String(format: "wrote %@ (%.1f MB)", out.lastPathComponent, Double(cbytes) / 1e6))
+
+case "stabilize":
+  // stabilize <in> <out.mp4> <kbps> [window = 0.7 s] [zoom = 1.08]
+  // Pass 1 measures the shift between consecutive frames (Vision image registration) and builds the camera
+  // path. The path is smoothed with a moving average over the window; each frame is then shifted by
+  // (smooth - path), within the margin the zoom leaves. Jumps (cuts, cross-fades) are not followed.
+  // Prints the shake (mean distance of the path from its smoothed version) and the fastest moments.
+  // With <out> = "-" it only measures.
+  let outPath = args[3]
+  let kbps = Int(args[4]) ?? 4000
+  let window = args.count > 5 ? Double(args[5])! : 0.7
+  let zoom = CGFloat(args.count > 6 ? Double(args[6])! : 1.08)
+  let srcV = load { try await asset.loadTracks(withMediaType: .video) }.first!
+  let srcA = load { try await asset.loadTracks(withMediaType: .audio) }.first
+  let size = load { try await srcV.load(.naturalSize) }
+  let fps = Double(load { try await srcV.load(.nominalFrameRate) })
+  func frames(_ body: (CVPixelBuffer, CMTime) -> Void) {
+    let r = try! AVAssetReader(asset: asset)
+    let o = AVAssetReaderTrackOutput(track: srcV, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+    r.add(o); r.startReading()
+    while let b = o.copyNextSampleBuffer() { if let px = CMSampleBufferGetImageBuffer(b) { body(px, CMSampleBufferGetPresentationTimeStamp(b)) } }
+  }
+  var dx: [Double] = [], dy: [Double] = [], times: [Double] = []
+  var prev: CVPixelBuffer?
+  frames { px, t in
+    var x = 0.0, y = 0.0
+    if let p = prev {
+      let req = VNTranslationalImageRegistrationRequest(targetedCVPixelBuffer: p)
+      try? VNImageRequestHandler(cvPixelBuffer: px, options: [:]).perform([req])
+      if let o = req.results?.first as? VNImageTranslationAlignmentObservation {
+        x = Double(o.alignmentTransform.tx); y = Double(o.alignmentTransform.ty)
+      }
+      if abs(x) > Double(size.width) * 0.06 || abs(y) > Double(size.height) * 0.06 { x = 0; y = 0 } // a cut, not motion
+    }
+    dx.append(x); dy.append(y); times.append(t.seconds); prev = px
+  }
+  let n = dx.count
+  func path(_ d: [Double]) -> [Double] { var a = 0.0; return d.map { a += $0; return a } }
+  func smooth(_ p: [Double]) -> [Double] {
+    let h = max(1, Int(window * fps / 2))
+    var pre = [0.0]; for v in p { pre.append(pre.last! + v) }
+    return (0..<p.count).map { i in let a = max(0, i - h), b = min(p.count - 1, i + h); return (pre[b + 1] - pre[a]) / Double(b - a + 1) }
+  }
+  let px = path(dx), py = path(dy), sx = smooth(px), sy = smooth(py)
+  let shake = (0..<n).map { hypot(sx[$0] - px[$0], sy[$0] - py[$0]) }.reduce(0, +) / Double(max(1, n))
+  print(String(format: "frames %d, shake %.2f px (mean distance from the smoothed path)", n, shake))
+  // fastest half seconds
+  let per = Int(fps / 2)
+  var speeds: [(Double, Double)] = []
+  var i0 = 0
+  while i0 + per <= n { speeds.append((times[i0], (i0..<i0 + per).map { hypot(dx[$0], dy[$0]) }.reduce(0, +) * 2)); i0 += per }
+  print("fastest moments (px/s): " + speeds.sorted { $0.1 > $1.1 }.prefix(10).sorted { $0.0 < $1.0 }.map { String(format: "%.1fs:%.0f", $0.0, $0.1) }.joined(separator: " "))
+  if outPath == "-" { break }
+  let mx = Double(size.width) * Double(zoom - 1) / 2, my = Double(size.height) * Double(zoom - 1) / 2
+  let reader = try! AVAssetReader(asset: asset)
+  let vOut = AVAssetReaderTrackOutput(track: srcV, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+  reader.add(vOut)
+  var aOut: AVAssetReaderTrackOutput?
+  if let a = srcA { let o = AVAssetReaderTrackOutput(track: a, outputSettings: nil); reader.add(o); aOut = o }
+  let out = URL(fileURLWithPath: outPath)
+  try? FileManager.default.removeItem(at: out)
+  let writer = try! AVAssetWriter(outputURL: out, fileType: .mp4)
+  let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: [
+    AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: Int(size.width), AVVideoHeightKey: Int(size.height),
+    AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: kbps * 1000, AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel, AVVideoMaxKeyFrameIntervalKey: 60]])
+  let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: vIn, sourcePixelBufferAttributes: [
+    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA, kCVPixelBufferWidthKey as String: Int(size.width), kCVPixelBufferHeightKey as String: Int(size.height)])
+  writer.add(vIn)
+  var aIn: AVAssetWriterInput?
+  if let a = srcA {
+    let i = AVAssetWriterInput(mediaType: .audio, outputSettings: nil, sourceFormatHint: load { try await a.load(.formatDescriptions) }.first)
+    writer.add(i); aIn = i
+  }
+  let ci = CIContext()
+  let sgnX = ProcessInfo.processInfo.environment["STAB_SX"].flatMap(Double.init) ?? 1
+  let sgnY = ProcessInfo.processInfo.environment["STAB_SY"].flatMap(Double.init) ?? 1
+  reader.startReading(); writer.startWriting(); writer.startSession(atSourceTime: .zero)
+  let group = DispatchGroup()
+  var k = 0
+  group.enter()
+  vIn.requestMediaDataWhenReady(on: DispatchQueue(label: "v")) {
+    while vIn.isReadyForMoreMediaData {
+      guard let b = vOut.copyNextSampleBuffer(), let src = CMSampleBufferGetImageBuffer(b) else { vIn.markAsFinished(); group.leave(); return }
+      let i = min(k, n - 1); k += 1
+      let cx = max(-mx, min(mx, (sx[i] - px[i]) * sgnX)), cy = max(-my, min(my, (sy[i] - py[i]) * sgnY))
+      var img = CIImage(cvPixelBuffer: src)
+      let t = CGAffineTransform(translationX: size.width / 2, y: size.height / 2).scaledBy(x: zoom, y: zoom)
+        .translatedBy(x: -size.width / 2 + CGFloat(cx) / zoom, y: -size.height / 2 + CGFloat(cy) / zoom)
+      img = img.transformed(by: t)
+      var dst: CVPixelBuffer?
+      CVPixelBufferPoolCreatePixelBuffer(nil, adaptor.pixelBufferPool!, &dst)
+      ci.render(img, to: dst!, bounds: CGRect(origin: .zero, size: size), colorSpace: CGColorSpaceCreateDeviceRGB())
+      adaptor.append(dst!, withPresentationTime: CMSampleBufferGetPresentationTimeStamp(b))
+    }
+  }
+  if let i = aIn, let o = aOut {
+    group.enter()
+    i.requestMediaDataWhenReady(on: DispatchQueue(label: "a")) {
+      while i.isReadyForMoreMediaData {
+        if let b = o.copyNextSampleBuffer() { i.append(b) } else { i.markAsFinished(); group.leave(); return }
+      }
+    }
+  }
+  group.wait()
+  let semS = DispatchSemaphore(value: 0)
+  writer.finishWriting { semS.signal() }
+  semS.wait()
+  if writer.status != .completed { fail("stabilize failed: \(String(describing: writer.error ?? reader.error))") }
+  print("wrote \(out.lastPathComponent)")
 
 case "levels":
   // levels <in> <step>: RMS and peak (dBFS) of the audio per step, to spot voices before publishing.

@@ -61,16 +61,22 @@ LOGO_S = 4.5
 def build(name, segs, kbps, cards=(), chapters=None, stamps=()):
     """chapters: {caption key: (step number, 'Name')} for step chips and a progress bar (creative cut).
     stamps: [(raw time, text, 'ok' | 'err')] pop up at that moment of the recording."""
-    ranges = ','.join(f'{s}-{e}' + (f'@{c}' if c else '') for s, e, c, _ in segs)
+    segs = [tuple(x) + (1,) * (5 - len(x)) for x in segs]  # optional 5th field: speed (0.5 = half speed)
+    ranges = ','.join(f'{s}-{e}' + (f'@{c}' if c else '') + (f'*{v}' if v != 1 else '') for s, e, c, _, v in segs)
     os.makedirs(WORK, exist_ok=True)
     raw = f'{WORK}/{name}_raw.mp4'
     subprocess.run([VT, 'montage', IN, raw, ranges, str(FADE), '1280', '720', '9000'], check=True)
+    # smooth the head movement (camera path averaged over 0.7 s, 10 % zoom as margin), before the captions go on
+    stab = f'{WORK}/{name}_stab.mp4'
+    r = subprocess.run([VT, 'stabilize', raw, stab, '9000', '0.7', '1.10'], check=True, capture_output=True, text=True)
+    print(name, r.stdout.strip().splitlines()[0])
+    raw = stab
     caps, t = [], 0.0
     extra, chap_at = [], []
-    for i, (s, e, c, key) in enumerate(segs):
-        d = e - s
+    for i, (s, e, c, key, v) in enumerate(segs):
+        d = (e - s) / v
         for rt, text, col in stamps:
-            if s + 0.2 <= rt <= e - 0.2:  # the chime comes just before the cut: the pop-up may run over the fade
+            if v == 1 and s + 0.2 <= rt <= e - 0.2:  # the chime comes just before the cut: the pop-up may run over the fade
                 if extra and extra[-1]['e'] > t + rt - s: extra[-1]['e'] = t + rt - s - 0.05
                 extra.append({'s': t + rt - s, 'e': t + rt - s + 1.4, 't': text, 'style': 'stamp', 'colour': col})
         if chapters and key in chapters:
@@ -106,11 +112,13 @@ def build(name, segs, kbps, cards=(), chapters=None, stamps=()):
             if b - a > 1: extra.append({'s': a, 'e': b, 't': f'{n} / {steps}  ·  {label}', 'style': 'chip'})
         extra.append({'s': 0.0, 'e': total, 't': '', 'style': 'bar', 'marks': [a / total for _, _, a, _ in chap_at[1:]]})
     caps += extra
-    # over a darkened title card the dark blue FAU logo needs a white plate
-    logo_s = 3.3 if chapters else LOGO_S  # creative cut: logos leave with the title card, the step chip follows
-    caps += [{'s': 0.0, 'e': logo_s, 't': '', **l, 'badge': bool(cards) and l['pos'] == 'tl'} for l in LOGOS]
-    if cards:  # the end card shows the logos again
-        caps += [{'s': total - 3.6, 'e': total - 0.05, 't': '', **l, 'badge': l['pos'] == 'tl'} for l in LOGOS]
+    if cards:
+        # over the darkened title and end cards: the transparent FAU logo in white (dark blue is unreadable there)
+        dark = [{**LOGOS[0], 'img': f'{WORK}/fau_white.png'}, LOGOS[1]]
+        for k in [c for c in caps if c.get('card')]:
+            caps += [{'s': k['s'], 'e': k['e'], 't': '', **l} for l in dark]
+    else:
+        caps += [{'s': 0.0, 'e': LOGO_S, 't': '', **l} for l in LOGOS]
     jf = f'{WORK}/{name}.json'
     json.dump(caps, open(jf, 'w'), ensure_ascii=False, indent=1)
     out = f"{OUTDIR['full'] if name.startswith('formboard-xr') else ROOT + '/demo/media'}/{name}.mp4"
@@ -121,12 +129,12 @@ which = sys.argv[1:] or ['pegs', 'wiring', 'finish', 'full']
 if 'pegs' in which: build('mr-pegs', SETUP[2:] + PEGS, 3000)
 if 'wiring' in which: build('mr-wiring', WIRING, 3000)
 if 'finish' in which: build('mr-finished', FINISH, 3000)
-# Full edits: teaser, harness choice, pegs, wiring, finish; the car view starts with the turn from the board
-# and the video ends on the sign above the car (2:55), under the end card (from about 1:11 to 1:15).
-FULL = TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1] + [(162.9, 175.0, None, 'incar')]
+# Full edits: teaser, harness choice, pegs, wiring, finish; the car view starts with the turn from the board.
+# The ending: the sign above the car (2:51.5-2:54.4) at half speed, about 2 s clear, then under the end card.
+FULL = TEASER + SETUP[2:] + PEGS + WIRING + FINISH[:-1] + [(165.7, 171.5, None, 'incar'), (171.5, 174.4, None, None, 0.5)]  # 2:44-2:45.6 is a whip pan (1100 px/s): dissolve instead
 CARDS = [
     (0.0, 3.3, 'Formboard XR · Mixed Reality', 'Kabelbaumtraining aus VW-KBL-Daten · wire harness training from VW KBL data'),
-    (-3.6, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
+    (-3.8, -0.05, 'Läuft im Browser des Headsets, ohne Installation', 'Runs in the headset’s browser · suavi-yildirim.github.io/formboard-xr'),
 ]
 if 'full' in which:
     build('formboard-xr-mr-full', FULL, 4000, cards=CARDS)
@@ -137,7 +145,7 @@ if 'creative' in which:
     CAP['route'] = ('18 wires, each at its true KBL length', '18 Leitungen, jede in ihrer echten KBL-Länge')
     CAP['done'] = ('Flattened 1:1 from 3D: 30 segments, 0 % length error', '1:1 aus 3D abgewickelt: 30 Segmente, 0 % Längenfehler')
     CAP['incar'] = ('Same KBL file: the harness in the car, 1:1', 'Dieselbe KBL-Datei: der Leitungssatz im Fahrzeug, 1:1')
-    segs = [(116.9, 120.3, '620:100:1000', k) if (a, b) == (116.9, 120.3) else (a, b, c, k) for a, b, c, k in FULL]
+    segs = [(116.9, 120.3, '620:100:1000') + tuple(x[3:]) if x[:2] == (116.9, 120.3) else x for x in FULL]
     chapters = {'menu': (1, 'Wählen'), 'pegs': (2, 'Stifte setzen'),
                 'route': (3, 'Verlegen'), 'snap': (3, 'Verlegen'), 'grow': (3, 'Verlegen'), 'wrong': (3, 'Verlegen'),
                 'dense': (3, 'Verlegen'), 'bundle': (3, 'Verlegen'), 'last': (3, 'Verlegen'),
